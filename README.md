@@ -9,10 +9,14 @@
 ## 구조
 
 ```
-src/            FastAPI 서비스 · LangGraph 그래프 · 통계 · RAG
-docs/           설계 · 인터페이스 계약
-data/           중간 산출물 (원자료는 커밋하지 않는다)
+docs/                    설계 · 인터페이스 계약
+src/family_fitness_ai/   api · graph · rag · stats · ingest · labeling · common
+tests/
+data/                    manifest.csv 와 release/ 만 커밋한다
 ```
+
+**원자료는 레포에 넣지 않는다.** 목록만 `data/manifest.csv` 로 관리하고,
+실물은 zip으로 팀끼리 공유한다 ([`docs/02` §3.1](docs/02-공공데이터-관리-규약.md)).
 
 ## 문서
 
