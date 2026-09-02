@@ -1,0 +1,33 @@
+[project]
+name = "family-fitness-ai"
+version = "0.1.0"
+description = "우리가족 체력키움 — AI 파트"
+requires-python = ">=3.11"
+# 의존성은 코드가 들어올 때 채운다. 확정된 스택은 docs/01 §1.
+dependencies = []
+
+[project.optional-dependencies]
+dev = ["pytest>=8.2", "pytest-cov>=5.0", "ruff>=0.6", "mypy>=1.10", "pre-commit>=3.7"]
+
+[build-system]
+requires = ["setuptools>=69"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "SIM"]
+
+[tool.mypy]
+python_version = "3.11"
+warn_unused_ignores = true
+ignore_missing_imports = true
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src"]
