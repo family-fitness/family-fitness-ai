@@ -27,6 +27,10 @@ data/                    manifest.csv 와 release/ 만 커밋한다
 | [`docs/03-인터페이스-명세.md`](docs/03-인터페이스-명세.md) | AI ↔ 웹서버 호출 계약과 필드 명세 |
 | [`docs/04-RAG-코퍼스-규약.md`](docs/04-RAG-코퍼스-규약.md) | 청크 생성·검색·거부 조건 |
 
+`01`~`04` 는 프로젝트 전체의 확정 규약이다. **기능 하나하나의 실행 방법과 산출물은
+`docs/dev/<이슈ID>-<이름>.md` 가 따로 갖는다** —
+예: [`docs/dev/AI-1-age-band-distribution.md`](docs/dev/AI-1-age-band-distribution.md).
+
 백엔드와 프론트는 `03` 하나만 보면 된다 — 규칙과 필드가 같은 문서에 있고, 끝의
 체크리스트가 각자 지킬 것을 모아 둔다.
 

@@ -14,6 +14,7 @@
 | 웹서버와 무엇을 주고받나 · 필드는 무엇인가 | `docs/03-인터페이스-명세.md` |
 | 코치가 무엇을 근거로 답하나 | `docs/04-RAG-코퍼스-규약.md` |
 | 브랜치 · 커밋 · PR | `CONTRIBUTING.md` |
+| 기능 하나의 실행 방법·산출물·한계 | `docs/dev/<이슈ID>-<이름>.md` |
 
 **코드 구역은 문서와 1:1이다.** `src/family_fitness_ai/` 각 패키지의 `__init__.py`에
 그 구역의 규약이 어느 절인지 적혀 있다.
@@ -38,19 +39,33 @@ AI 파트만 건드린다. **API 서버(Spring Boot)와 프론트(React Native) 
 - **원자료를 커밋하지 않는다.** 목록은 `data/manifest.csv` (`docs/02` §3.1)
 - **데이터가 없을 때 더미로 채워 "돌아가게" 만들지 않는다.** 없으면 없다고 보고한다
 - **테스트가 실패하면 단정문이 아니라 구현을 고친다**
+- **미결 표의 번호를 재배열하지 않는다.** 해소된 항목은 행만 지우고 번호는 비워 둔다 —
+  다른 문서가 번호로 참조하고, 갈래를 합칠 때 그 어긋남은 자동으로 잡히지 않는다
 - 문서와 코드가 어긋나면 **문서를 먼저 고치고** 영향 범위를 알린다
 
 ## 5. 명령
 
-```bash
-pip install -e ".[dev]"   # 처음 한 번
-pre-commit install        # 커밋 훅 (ruff)
-git config core.hooksPath .githooks   # 브랜치·커밋 메시지 검사
+처음 한 번
 
+```bash
+pip install -e ".[dev]"
+pre-commit install                     # 커밋 훅 (ruff)
+git config core.hooksPath .githooks    # 브랜치·커밋 메시지 검사
+```
+
+품질 검사 — `make verify` 가 CI 와 같은 것을 돈다
+
+```bash
 make lint    # ruff check + format --check
 make types   # mypy
 make test    # pytest
-make verify  # 위 셋. CI가 도는 것과 같다
+make verify
+```
+
+데이터 산출 — 원자료 zip 을 푼 뒤. 기준표는 레포에 있어 인자가 필요 없다
+
+```bash
+make distribution DATA_DIR=~/받은자료/kspo-measure
 ```
 
 ## 6. 현재 상태
