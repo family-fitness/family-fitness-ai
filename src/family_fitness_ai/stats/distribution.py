@@ -161,9 +161,11 @@ def main(argv: list[str] | None = None) -> int:
     dist.to_csv(out / "age_band_score_distribution.csv", index=False, encoding="utf-8-sig")
     C.to_frame(thresholds).to_csv(out / "grade_thresholds.csv", index=False, encoding="utf-8-sig")
 
+    # 출력을 파일로 넘기면 로케일 인코딩을 쓴다. 한국어 윈도우(cp949)에 없는
+    # 문자(⚠, em dash)를 넣지 않는다.
     skipped = int((summary["status"] != "ok").sum())
     if skipped:
-        print(f"⚠ 눈금이 서지 않아 제외한 칸 {skipped}개 — 사유는 요약 CSV 의 status 열")
+        print(f"[알림] 눈금이 서지 않아 제외한 칸 {skipped}개. 사유는 요약 CSV 의 status 열")
     print(f"원자료 {len(df):,}행 · 문턱 {len(thresholds):,}건")
     print(f"요약 {len(summary):,}행 → {out / 'age_band_score_summary.csv'}")
     print(f"분포 {len(dist):,}행 → {out / 'age_band_score_distribution.csv'}")

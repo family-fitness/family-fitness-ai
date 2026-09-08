@@ -32,7 +32,7 @@ def _no_csv_message(root: Path) -> str:
     lines = [f"CSV가 없다: {root}"]
     lines.append(f"  안에 있는 것: {', '.join(entries[:8]) or '(비어 있다)'}")
     if nested:
-        lines.append(f"  CSV는 하위 디렉터리에 있다 — --data-dir {root / nested[0]}")
+        lines.append(f"  CSV는 하위 디렉터리에 있다. --data-dir {root / nested[0]}")
     return "\n".join(lines)
 
 
