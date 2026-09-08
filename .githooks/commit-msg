@@ -1,0 +1,75 @@
+#!/usr/bin/env python3
+"""커밋 메시지 규약 검사 (계층 0).
+
+GitHub 커밋 ruleset과 같은 정규식을 로컬에서 먼저 돌린다.
+푸시하고 나서 거절당하는 것보다, 커밋하는 순간 막히는 편이 싸다.
+
+우회: git commit --no-verify
+"""
+import re
+import subprocess
+import sys
+from pathlib import Path
+
+# GitHub ruleset 원본:
+#   ^(build|chore|ci|docs|feat|fix|perf|refactor|revert|style|test)(\([\w\p{Hangul}\-\.]+\))?(!)?: [\w\p{Hangul} ]+([\s\S]*)
+# 파이썬 re는 \p{Hangul}이 없어 한글 음절·자모 범위로 바꿔 쓴다.
+HANGUL = r"가-힣ㄱ-ㆎ"
+PATTERN = re.compile(
+    r"^(build|chore|ci|docs|feat|fix|perf|refactor|revert|style|test)"
+    rf"(\([\w{HANGUL}\-\.]+\))?"
+    r"(!)?"
+    rf": [\w{HANGUL} ]+([\s\S]*)"
+)
+
+TYPES = "build chore ci docs feat fix perf refactor revert style test"
+
+
+def is_exempt(subject: str) -> bool:
+    """머지·리버트·fixup 커밋은 git이 메시지를 자동 생성한다. 손대지 않는다."""
+    if subject.startswith(("Merge ", "Revert ", "fixup!", "squash!", "amend!")):
+        return True
+    git_dir = subprocess.run(
+        ["git", "rev-parse", "--git-dir"], capture_output=True, text=True
+    ).stdout.strip()
+    return bool(git_dir) and (Path(git_dir) / "MERGE_HEAD").exists()
+
+
+def main() -> int:
+    raw = Path(sys.argv[1]).read_text(encoding="utf-8")
+    lines = [ln for ln in raw.splitlines() if not ln.startswith("#")]
+    body = "\n".join(lines).strip()
+
+    if not body:
+        return 0  # 빈 메시지는 git이 알아서 커밋을 취소한다.
+
+    subject = body.splitlines()[0]
+
+    if is_exempt(subject):
+        return 0
+
+    if PATTERN.match(body):
+        return 0
+
+    print("", file=sys.stderr)
+    print("✗ 커밋 메시지가 규약에 맞지 않습니다.", file=sys.stderr)
+    print(f"  입력: {subject}", file=sys.stderr)
+    print("", file=sys.stderr)
+    print("  형식: <type>(<scope>)?<!>?: <제목>", file=sys.stderr)
+    print(f"  type: {TYPES}", file=sys.stderr)
+    print("", file=sys.stderr)
+    print("  좋은 예", file=sys.stderr)
+    print("    feat: 등급 카드 백분위 계산 추가", file=sys.stderr)
+    print("    fix(rag): 인용 누락된 청크 필터링 오류 수정", file=sys.stderr)
+    print("    feat!: 미션 승인 게이트 응답 스키마 변경", file=sys.stderr)
+    print("", file=sys.stderr)
+    print("  나쁜 예", file=sys.stderr)
+    print("    수정   (type 없음)", file=sys.stderr)
+    print("    feat:로그인   (콜론 뒤 공백 없음)", file=sys.stderr)
+    print("    fix: 버그 수정   (무엇을 고쳤는지 없음 — 형식은 통과하나 쓰지 말 것)", file=sys.stderr)
+    print("", file=sys.stderr)
+    return 1
+
+
+if __name__ == "__main__":
+    sys.exit(main())

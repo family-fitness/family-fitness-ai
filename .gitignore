@@ -1,0 +1,47 @@
+# ── Python ─────────────────────────────────────────────
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+dist/
+*.egg-info/
+.eggs/
+
+# 가상환경
+.venv/
+venv/
+env/
+
+# 캐시
+.ruff_cache/
+.mypy_cache/
+.pytest_cache/
+.coverage
+coverage.xml
+htmlcov/
+
+# ── 비밀값 ─────────────────────────────────────────────
+# .env.example만 커밋한다. 실제 키는 절대 올리지 않는다.
+.env
+.env.*
+!.env.example
+
+# ── 데이터 ─────────────────────────────────────────────
+# 원자료는 저장소에 넣지 않는다. 재현은 수집·산출 스크립트로 한다.
+# data/ 를 통째로 제외하면 하위를 다시 포함할 수 없다 — data/* 로 쓴다.
+data/*
+!data/release/
+!data/manifest.csv
+models/
+*.faiss
+*.pkl
+
+# ── 도구·에디터 ────────────────────────────────────────
+.DS_Store
+.idea/
+.vscode/
+*.swp
+CLAUDE.local.md
+notebooks/.ipynb_checkpoints/

@@ -1,0 +1,39 @@
+[project]
+name = "family-fitness-ai"
+version = "0.1.0"
+description = "우리가족 체력키움 — AI 파트"
+requires-python = ">=3.11"
+# 확정된 스택은 docs/01 §1. 한 줄에 하나씩 둔다 — 여러 갈래에서 나눠 채운다.
+dependencies = [
+  "numpy>=1.26",
+  "openpyxl>=3.1",
+  "pandas>=2.2",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=8.2", "pytest-cov>=5.0", "ruff>=0.6", "mypy>=1.10", "pre-commit>=3.7"]
+
+[build-system]
+requires = ["setuptools>=69"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "SIM"]
+
+[tool.mypy]
+# python_version 을 고정하지 않는다. 고정하면 mypy 가 의존성 스텁까지 그 문법으로
+# 읽어, 새 파이썬용으로 설치된 numpy 스텁(PEP 695)에서 구문 오류가 난다.
+# 지금은 각자의 인터프리터를 따라가고, 3.11 호환 검증은 CI 가 맡는다.
+warn_unused_ignores = true
+ignore_missing_imports = true
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src"]
