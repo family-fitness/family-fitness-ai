@@ -30,6 +30,10 @@ DEFAULT_CRITERIA = Path("data/release/grade_thresholds.csv")
 BIN_EDGES = np.arange(0, 101, 10)
 QUANTILES = (10, 25, 50, 75, 90)
 
+# 칸별 원값 분위수. 서비스가 원자료 없이 경험분포를 되살려 채점하는 데 쓴다.
+# 99점을 다 싣는 이유는 꼬리를 자르면 최악 오차가 20점까지 벌어지기 때문이다.
+VALUE_QUANTILES = np.arange(1, 100)
+
 
 def _anchor_columns(anchors: Anchors | None) -> dict[str, object]:
     """앵커를 고정된 열로 편다. 3등급 문턱이 없는 항목은 anchor_40 이 빈칸이다."""
@@ -43,8 +47,10 @@ def _bands(thresholds: list[C.Threshold], age_group: str) -> list[tuple[int, int
     return sorted({(t.age_lo, t.age_hi) for t in thresholds if t.age_group == age_group})
 
 
-def build(df: pd.DataFrame, thresholds: list[C.Threshold]) -> tuple[pd.DataFrame, pd.DataFrame]:
-    """(요약, 분포) 두 표를 낸다."""
+def build(
+    df: pd.DataFrame, thresholds: list[C.Threshold]
+) -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]:
+    """(요약, 분포, 원값 분위수) 세 표를 낸다."""
     index: dict[tuple[str, str, int, int, str], dict[int, float]] = {}
     for t in thresholds:
         index.setdefault((t.age_group, t.sex, t.age_lo, t.age_hi, t.item_code), {})[t.grade] = (
@@ -53,6 +59,7 @@ def build(df: pd.DataFrame, thresholds: list[C.Threshold]) -> tuple[pd.DataFrame
 
     summary_rows: list[dict] = []
     dist_rows: list[dict] = []
+    quantile_rows: list[dict] = []
 
     for age_group, group_df in df.groupby(M.AGE_GROUP_COL, sort=False):
         for lo, hi in _bands(thresholds, str(age_group)):
@@ -117,6 +124,24 @@ def build(df: pd.DataFrame, thresholds: list[C.Threshold]) -> tuple[pd.DataFrame
                     )
                     if not ok:
                         continue
+                    quantile_rows.append(
+                        {
+                            **{
+                                k: base[k]
+                                for k in ("age_group", "age_lo", "age_hi", "age_unit", "sex")
+                            },
+                            "item_code": code,
+                            "n": int(values.size),
+                            **{
+                                f"q{q:02d}": round(float(x), 4)
+                                for q, x in zip(
+                                    VALUE_QUANTILES,
+                                    np.percentile(values, VALUE_QUANTILES),
+                                    strict=True,
+                                )
+                            },
+                        }
+                    )
                     counts, _ = np.histogram(scores, bins=BIN_EDGES)
                     counts[-1] += int((scores >= 100).sum())
                     total = int(counts.sum())
@@ -131,7 +156,11 @@ def build(df: pd.DataFrame, thresholds: list[C.Threshold]) -> tuple[pd.DataFrame
                             }
                         )
 
-    return pd.DataFrame(summary_rows), pd.DataFrame(dist_rows)
+    return (
+        pd.DataFrame(summary_rows),
+        pd.DataFrame(dist_rows),
+        pd.DataFrame(quantile_rows),
+    )
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -153,13 +182,14 @@ def main(argv: list[str] | None = None) -> int:
 
     df = M.load_dir(args.data_dir)
     thresholds = C.load(args.criteria)
-    summary, dist = build(df, thresholds)
+    summary, dist, quantiles = build(df, thresholds)
 
     out = Path(args.out)
     out.mkdir(parents=True, exist_ok=True)
     # utf-8-sig — 검수하는 사람이 엑셀로 연다 (docs/02 §4)
     summary.to_csv(out / "age_band_score_summary.csv", index=False, encoding="utf-8-sig")
     dist.to_csv(out / "age_band_score_distribution.csv", index=False, encoding="utf-8-sig")
+    quantiles.to_csv(out / "age_band_value_quantiles.csv", index=False, encoding="utf-8-sig")
     C.to_frame(thresholds).to_csv(out / "grade_thresholds.csv", index=False, encoding="utf-8-sig")
 
     # 출력을 파일로 넘기면 로케일 인코딩을 쓴다. 한국어 윈도우(cp949)에 없는
@@ -170,6 +200,7 @@ def main(argv: list[str] | None = None) -> int:
     print(f"원자료 {len(df):,}행 · 문턱 {len(thresholds):,}건")
     print(f"요약 {len(summary):,}행 → {out / 'age_band_score_summary.csv'}")
     print(f"분포 {len(dist):,}행 → {out / 'age_band_score_distribution.csv'}")
+    print(f"분위수 {len(quantiles):,}행 → {out / 'age_band_value_quantiles.csv'}")
     return 0
 
 
