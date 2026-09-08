@@ -22,6 +22,10 @@ unzip kspo-measure-202407-202607.zip -d ~/받은자료/kspo-measure
 make distribution DATA_DIR=~/받은자료/kspo-measure   # 저장소 루트에서
 ```
 
+**기간별로 나뉜 CSV를 한 디렉터리에 모아 두면 된다.** 파일명 순으로 읽어 이어 붙이므로
+개수와 기간은 자유다. 하위 디렉터리는 뒤지지 않으니, zip이 폴더 하나를 만들며 풀렸다면
+그 폴더를 가리킨다.
+
 기준표 원본이 갱신됐을 때만 xlsx를 준다. 문턱 CSV가 함께 다시 만들어진다.
 
 ```bash

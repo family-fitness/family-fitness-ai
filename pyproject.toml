@@ -28,7 +28,9 @@ target-version = "py311"
 select = ["E", "F", "I", "UP", "B", "SIM"]
 
 [tool.mypy]
-python_version = "3.11"
+# python_version 을 고정하지 않는다. 고정하면 mypy 가 의존성 스텁까지 그 문법으로
+# 읽어, 새 파이썬용으로 설치된 numpy 스텁(PEP 695)에서 구문 오류가 난다.
+# 지금은 각자의 인터프리터를 따라가고, 3.11 호환 검증은 CI 가 맡는다.
 warn_unused_ignores = true
 ignore_missing_imports = true
 

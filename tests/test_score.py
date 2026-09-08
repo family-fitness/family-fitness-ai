@@ -116,3 +116,22 @@ def test_문턱_표는_csv로_왕복한다(tmp_path) -> None:
     path = tmp_path / "grade_thresholds.csv"
     C.to_frame(src).to_csv(path, index=False, encoding="utf-8-sig")
     assert set(C.load(path)) == set(src)
+
+
+def test_틸드_경로와_안내_메시지(tmp_path, monkeypatch) -> None:
+    """Makefile 이 인자를 따옴표로 넘겨 셸이 ~ 를 풀지 못한다. 코드가 푼다."""
+    from family_fitness_ai.ingest.measurements import load_dir
+
+    monkeypatch.setenv("HOME", str(tmp_path))
+    (tmp_path / "받은자료").mkdir()
+    with pytest.raises(FileNotFoundError, match="CSV가 없다"):
+        load_dir("~/받은자료")
+
+    with pytest.raises(FileNotFoundError, match="디렉터리가 없다"):
+        load_dir("~/없는경로")
+
+    nested = tmp_path / "풀린곳" / "kspo-measure"
+    nested.mkdir(parents=True)
+    (nested / "a.csv").write_text("x\n", encoding="utf-8")
+    with pytest.raises(FileNotFoundError, match="하위 디렉터리에 있다"):
+        load_dir(tmp_path / "풀린곳")

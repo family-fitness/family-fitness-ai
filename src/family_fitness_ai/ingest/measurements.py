@@ -23,11 +23,30 @@ def _item_column(code: str) -> str:
     return f"MESURE_IEM_{code}_VALUE"
 
 
+def _no_csv_message(root: Path) -> str:
+    """CSV를 못 찾았을 때, 무엇을 봤는지 알려준다. 경로 오타와 zip 구조를 가른다."""
+    if not root.exists():
+        return f"디렉터리가 없다: {root}"
+    entries = sorted(p.name for p in root.iterdir() if not p.name.startswith("."))
+    nested = sorted(p.name for p in root.iterdir() if p.is_dir() and any(p.glob("*.csv")))
+    lines = [f"CSV가 없다: {root}"]
+    lines.append(f"  안에 있는 것: {', '.join(entries[:8]) or '(비어 있다)'}")
+    if nested:
+        lines.append(f"  CSV는 하위 디렉터리에 있다 — --data-dir {root / nested[0]}")
+    return "\n".join(lines)
+
+
 def load_dir(data_dir: str | Path) -> pd.DataFrame:
-    """디렉터리의 월별 CSV를 전부 읽어 한 표로 만든다."""
-    paths = sorted(Path(data_dir).glob("*.csv"))
+    """디렉터리의 월별 CSV를 전부 읽어 한 표로 만든다.
+
+    기간별로 나뉜 배포본을 한 디렉터리에 모아 두면 된다. 파일명 순으로 읽고 이어
+    붙이므로 개수와 기간은 자유다. 하위 디렉터리는 뒤지지 않는다 — 어디서 읽었는지가
+    분명해야 산출물의 기준 기간을 말할 수 있다.
+    """
+    root = Path(data_dir).expanduser()
+    paths = sorted(root.glob("*.csv"))
     if not paths:
-        raise FileNotFoundError(f"CSV가 없다: {data_dir}")
+        raise FileNotFoundError(_no_csv_message(root))
 
     keep = [AGE_GROUP_COL, AGE_COL, SEX_COL, GRADE_COL, DATE_COL]
     item_cols = [_item_column(c) for c in ITEMS]
