@@ -1,9 +1,0 @@
-# 커밋 시 자동 실행. 목표 5초 이내.
-# 설치: pre-commit install
-repos:
-  - repo: https://github.com/astral-sh/ruff-pre-commit
-    rev: v0.16.0   # 갱신 시 pyproject 의 ruff 버전과 맞춘다
-    hooks:
-      - id: ruff
-        args: [--fix]
-      - id: ruff-format
