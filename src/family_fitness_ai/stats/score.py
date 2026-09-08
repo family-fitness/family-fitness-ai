@@ -10,21 +10,24 @@ from dataclasses import dataclass
 
 import numpy as np
 
-ANCHOR_SCORES = (0.0, 40.0, 60.0, 80.0, 100.0)
 MIN_SAMPLE = 30  # 이보다 적으면 ECDF를 믿지 않고 선형으로 떨어뜨린다
 
 
 @dataclass(frozen=True)
 class Anchors:
-    """점수 눈금. x 는 언제나 '클수록 좋다' 공간의 값이다."""
+    """점수 눈금. x 는 언제나 '클수록 좋다' 공간의 값이고, y 는 그 점수다.
 
-    x: tuple[float, float, float, float, float]
-    grade3_from_p25: bool  # 3등급 문턱이 없어 p25로 채웠는가
+    앵커 수는 기준표가 정의한 문턱 수를 따른다. 운동체력(순발력·민첩성·협응력)은
+    3등급 문턱이 없어 40점 자리가 비고, 0에서 60까지가 한 구간이 된다.
+    """
+
+    x: tuple[float, ...]
+    y: tuple[float, ...]
     method: str  # "ecdf" | "linear"
 
     @property
-    def y(self) -> tuple[float, ...]:
-        return ANCHOR_SCORES
+    def has_grade3(self) -> bool:
+        return 40.0 in self.y
 
 
 def build_anchors(
@@ -50,22 +53,24 @@ def build_anchors(
     if 1 not in t or 2 not in t:
         return None, "no_grade_1_2"
 
-    # 3등급 문턱이 없는 항목은 40점 앵커를 그 칸의 p25 로 채운다 (docs/02 §5.3).
-    grade3_from_p25 = 3 not in t
-    t3 = t.get(3, float(np.percentile(v, 25)))
+    # 기준표에 있는 문턱만 앵커로 쓴다. 3등급 문턱이 없는 것은 결측이 아니라
+    # 그 항목이 3등급 판정 대상이 아니라는 뜻이다 (docs/02 §5.2).
+    inner = [(t[3], 40.0)] if 3 in t else []
+    inner += [(t[2], 60.0), (t[1], 80.0)]
 
     # 0·100 앵커는 분포에서 온다. 문턱 앵커를 뒤집지 않도록 바깥으로만 넓힌다.
-    x_low = min(float(np.percentile(v, 2)), t3)
+    x_low = min(float(np.percentile(v, 2)), inner[0][0])
     x_high = max(float(np.percentile(v, 98)), t[1])
 
-    x = (x_low, t3, t[2], t[1], x_high)
+    x = (x_low, *(xv for xv, _ in inner), x_high)
+    y = (0.0, *(yv for _, yv in inner), 100.0)
     if not all(a < b for a, b in zip(x, x[1:], strict=False)):
         # 문턱이 겹치거나 뒤집히면 눈금이 성립하지 않는다. 유아기 윗몸말아올리기처럼
         # 2·3등급이 둘 다 0회인 칸이 여기 걸린다 — 40점과 60점을 가를 값이 없다.
         return None, "anchors_not_monotonic"
 
     method = "ecdf" if v.size >= MIN_SAMPLE else "linear"
-    return Anchors(x=x, grade3_from_p25=grade3_from_p25, method=method), "ok"
+    return Anchors(x=x, y=y, method=method), "ok"
 
 
 def score(

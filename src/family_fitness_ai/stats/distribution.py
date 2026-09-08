@@ -22,13 +22,21 @@ import pandas as pd
 from ..ingest import measurements as M
 from . import criteria as C
 from .items import ITEMS
-from .score import ANCHOR_SCORES, build_anchors, score
+from .score import Anchors, build_anchors, score
 
 # 기준표는 레포에 커밋되어 있다. 원자료 zip 에는 측정 기록만 담긴다 (docs/02 §3.1).
 DEFAULT_CRITERIA = Path("data/release/grade_thresholds.csv")
 
 BIN_EDGES = np.arange(0, 101, 10)
 QUANTILES = (10, 25, 50, 75, 90)
+
+
+def _anchor_columns(anchors: Anchors | None) -> dict[str, object]:
+    """앵커를 고정된 열로 편다. 3등급 문턱이 없는 항목은 anchor_40 이 빈칸이다."""
+    got = dict(zip(anchors.y, anchors.x, strict=True)) if anchors is not None else {}
+    return {
+        f"anchor_{k}": (round(float(got[k]), 4) if k in got else "") for k in (0, 40, 60, 80, 100)
+    }
 
 
 def _bands(thresholds: list[C.Threshold], age_group: str) -> list[tuple[int, int]]:
@@ -94,15 +102,8 @@ def build(df: pd.DataFrame, thresholds: list[C.Threshold]) -> tuple[pd.DataFrame
                             "n_measured": int(values.size),
                             "n": int(scores.size),
                             "method": anchors.method if anchors else "",
-                            "grade3_from_p25": int(anchors.grade3_from_p25) if anchors else "",
-                            **{
-                                f"anchor_{int(y)}": (round(float(x), 4) if anchors else "")
-                                for x, y in zip(
-                                    anchors.x if anchors else (0.0,) * 5,
-                                    ANCHOR_SCORES,
-                                    strict=True,
-                                )
-                            },
+                            "has_grade3": int(anchors.has_grade3) if anchors else "",
+                            **_anchor_columns(anchors),
                             "value_min": round(float(values.min()), 4) if values.size else "",
                             "value_max": round(float(values.max()), 4) if values.size else "",
                             **{

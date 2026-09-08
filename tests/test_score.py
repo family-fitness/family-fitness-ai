@@ -50,11 +50,19 @@ def test_작을수록_우수한_항목도_점수는_클수록_좋다() -> None:
     assert fast > slow
 
 
-def test_3등급_문턱이_없으면_p25로_채운다() -> None:
+def test_3등급_문턱이_없으면_40점_앵커를_두지_않는다() -> None:
+    """운동체력은 3등급 판정 대상이 아니다. 없는 문턱을 분포로 지어내지 않는다."""
     anchors, reason = build_anchors(REF, {2: 39.5, 1: 44.4}, lower_is_better=False)
     assert reason == "ok"
-    assert anchors.grade3_from_p25 is True
-    assert anchors.x[1] == pytest.approx(float(np.percentile(REF, 25)))
+    assert anchors.has_grade3 is False
+    assert anchors.y == (0.0, 60.0, 80.0, 100.0)
+    assert [_one(TH[g], anchors, REF) for g in (2, 1)] == [60.0, 80.0]
+
+
+def test_3등급_문턱이_있으면_40점_앵커를_쓴다() -> None:
+    anchors, _ = build_anchors(REF, TH, lower_is_better=False)
+    assert anchors.has_grade3 is True
+    assert anchors.y == (0.0, 40.0, 60.0, 80.0, 100.0)
 
 
 def test_문턱이_겹치면_눈금을_만들지_않는다() -> None:
@@ -63,11 +71,18 @@ def test_문턱이_겹치면_눈금을_만들지_않는다() -> None:
     assert anchors is None and reason == "anchors_not_monotonic"
 
 
-def test_p25_대체값이_2등급을_넘으면_눈금을_만들지_않는다() -> None:
-    # 성인 여 25~29 제자리멀리뛰기에서 실제로 일어난다 (docs/02 §6 ⑩)
-    values = np.full(1000, 150.0)
+def test_사분위가_2등급_문턱보다_위여도_눈금은_선다() -> None:
+    """성인 여 25~29 제자리멀리뛰기의 실제 모양이다.
+
+    예전에는 없는 3등급 문턱을 p25 로 채웠고, 그 값이 2등급 문턱을 넘으면 눈금이
+    무너져 칸을 통째로 버렸다. 문턱만 쓰면 그런 일이 없다.
+    """
+    values = RNG.normal(155.0, 8.0, 5000)
+    assert float(np.percentile(values, 25)) > 144.0  # 옛 규칙이 깨지던 조건
     anchors, reason = build_anchors(values, {2: 144.0, 1: 156.0}, lower_is_better=False)
-    assert anchors is None and reason == "anchors_not_monotonic"
+    assert reason == "ok"
+    assert anchors.y == (0.0, 60.0, 80.0, 100.0)
+    assert [_one(v, anchors, values) for v in (144.0, 156.0)] == [60.0, 80.0]
 
 
 def test_1_2등급이_없으면_점수를_내지_않는다() -> None:
