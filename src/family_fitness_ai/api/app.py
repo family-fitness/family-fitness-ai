@@ -1,7 +1,7 @@
 """FastAPI 앱 (docs/dev/AI-3).
 
-엔드포인트는 `/healthz` 와 `/readyz` 둘뿐이다. `/v1/*` 는 AI-4 부터 붙는다 —
-골격이라고 해서 "나중에 쓸 것"을 미리 넣지 않는다 (docs/03 §12).
+`/healthz`·`/readyz` 와 `/v1/fitness/assessment` 를 낸다. 나머지 `/v1` 은 그 갈래에서
+붙는다 — 골격이라고 해서 "나중에 쓸 것"을 미리 넣지 않는다 (docs/03 §12).
 
 실행:
     uvicorn family_fitness_ai.api.app:app --reload --port 8000
@@ -19,9 +19,10 @@ from fastapi.responses import JSONResponse
 from ..common import logging as reqlog
 from ..common.errors import ApiError, ErrorCode
 from ..common.settings import get_settings
-from . import readiness
+from . import fitness, readiness
 
 app = FastAPI(title="family-fitness-ai", version="0.1.0", docs_url="/docs")
+app.include_router(fitness.router)
 
 
 @app.middleware("http")
