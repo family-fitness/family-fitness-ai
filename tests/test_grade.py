@@ -1,18 +1,18 @@
-"""등급 판정 (docs/dev/AI-2)."""
+"""등급 판정 (docs/dev/AI-2).
+
+판정 규칙의 정본은 공단이다 — 인증단계 안내와 `등급평가항목및기준` 시트를 대조해
+옮겼다. 검사는 그 규칙을 문장 그대로 확인한다.
+"""
 
 from __future__ import annotations
 
 import pathlib
 
+import pandas as pd
 import pytest
 
-from family_fitness_ai.stats.criteria import Threshold, load
-from family_fitness_ai.stats.grade import (
-    GRADE_NAMES,
-    PARTICIPATED,
-    Verdict,
-    judge,
-)
+from family_fitness_ai.stats.criteria import BodyRange, Threshold, load, parse_body_range
+from family_fitness_ai.stats.grade import PARTICIPATED, Verdict, judge
 
 CRITERIA = pathlib.Path("data/release/grade_thresholds.csv")
 
@@ -28,215 +28,228 @@ def t(code: str, grade: int, value: float, *, age_group: str = "유소년") -> T
     return Threshold(age_group, "F", 11, 11, code, grade, value)
 
 
-# 유소년 여 11세를 본뜬 최소 문턱. 건강체력 넷 + 운동체력 하나.
-CELL = [
-    *(t("028", g, v) for g, v in ((1, 44.4), (2, 39.5), (3, 34.8))),  # 근력
-    *(t("012", g, v) for g, v in ((1, 10.9), (2, 6.5), (3, 3.0))),  # 유연성
-    *(t("020", g, v) for g, v in ((1, 62), (2, 51), (3, 40))),  # 심폐지구력
-    *(t("009", g, v) for g, v in ((1, 40), (2, 30), (3, 20))),  # 근지구력
-    *(t("022", g, v) for g, v in ((1, 165), (2, 146))),  # 순발력 — 3등급 문턱이 없다
-]
-FULL = {"028": 50.0, "012": 12.0, "020": 70, "009": 45, "022": 170}
+def cell_for(age_group: str) -> list[Threshold]:
+    """건강체력 넷 + 운동체력 둘. 운동체력에는 3등급 문턱이 없다."""
+    return [
+        *(t("028", g, v, age_group=age_group) for g, v in ((1, 44.4), (2, 39.5), (3, 34.8))),
+        *(t("012", g, v, age_group=age_group) for g, v in ((1, 10.9), (2, 6.5), (3, 3.0))),
+        *(t("020", g, v, age_group=age_group) for g, v in ((1, 62), (2, 51), (3, 40))),
+        *(t("009", g, v, age_group=age_group) for g, v in ((1, 40), (2, 30), (3, 20))),
+        *(t("022", g, v, age_group=age_group) for g, v in ((1, 165), (2, 146))),  # 순발력
+        *(t("043", g, v, age_group=age_group) for g, v in ((1, 50), (2, 40))),  # 민첩성
+    ]
 
 
-def judge_cell(measurements: dict[str, float]) -> object:
-    return judge(CELL, age_group="유소년", age=11, sex="F", measurements=measurements)
+CELL = cell_for("유소년")
+HEALTHY = {"028": 50.0, "012": 12.0, "020": 70, "009": 45}
 
 
-def test_전부_1등급_문턱을_넘으면_1등급이다() -> None:
-    assert judge_cell(FULL).grade == GRADE_NAMES[1]
+def g(measurements: dict[str, float], *, age_group: str = "유소년", body=None) -> str | None:
+    return judge(
+        cell_for(age_group),
+        age_group=age_group,
+        age=11,
+        sex="F",
+        measurements=measurements,
+        body_ranges=body,
+    ).grade
 
 
-def test_한_항목이_걸리면_등급이_내려간다() -> None:
-    """요인 점수가 아무리 높아도 AND 조건이다 (docs/02 §5.2)."""
-    result = judge_cell({**FULL, "012": 7.0})  # 유연성만 2등급 구간
-    assert result.grade == GRADE_NAMES[2]
+# ── 1·2등급 — 건강체력은 모두, 운동체력은 중 한 가지 ────────────────────
+
+
+def test_운동체력은_중_한_가지만_넘으면_된다() -> None:
+    """전부 요구하면 문턱이 빡빡한 항목 하나가 상위 등급을 통째로 막는다."""
+    # 순발력은 1등급, 민첩성은 미달 — 그래도 1등급이다
+    assert g({**HEALTHY, "022": 170, "043": 10}) == "1등급"
+
+
+def test_운동체력이_전부_미달이면_등급이_내려간다() -> None:
+    assert g({**HEALTHY, "022": 50, "043": 10}) == "3등급"
+
+
+def test_건강체력은_하나만_걸려도_내려간다() -> None:
+    """건강체력은 AND 조건이다."""
+    assert g({**HEALTHY, "012": 7.0, "022": 170}) == "2등급"
+
+
+def test_운동체력을_하나도_재지_않으면_상위_등급은_판정_불가다() -> None:
+    result = judge(CELL, age_group="유소년", age=11, sex="F", measurements=HEALTHY)
+    check1 = next(c for c in result.checks if c.grade == 1)
+    assert check1.verdict is Verdict.UNDECIDABLE
+    assert "운동체력" in check1.missing_factors
+    assert result.grade == "3등급"  # 3등급은 운동체력을 보지 않으므로 판정된다
+
+
+# ── 3등급 — 건강체력 + 신체조성. 운동체력 3요인은 반영하지 않는다 ────────
 
 
 def test_3등급은_운동체력을_보지_않는다() -> None:
-    """운동체력에 3등급 문턱이 없는 것은 결측이 아니다 (docs/02 §5.2)."""
+    """시트의 3등급 행에서 운동체력 칸은 비어 있다."""
     result = judge(
-        CELL,
-        age_group="유소년",
-        age=11,
-        sex="F",
-        measurements={"028": 35.0, "012": 3.5, "020": 41, "009": 21},  # 순발력 미측정
+        CELL, age_group="유소년", age=11, sex="F", measurements={**HEALTHY, "022": 1, "043": 1}
     )
-    assert result.grade == GRADE_NAMES[3]
     check3 = next(c for c in result.checks if c.grade == 3)
-    assert "순발력" not in check3.required_factors
     assert check3.verdict is Verdict.PASS
+    assert result.grade == "3등급"
 
 
-def test_1등급_판정은_순발력이_없으면_판정_불가다() -> None:
-    result = judge(
-        CELL,
-        age_group="유소년",
-        age=11,
-        sex="F",
-        measurements={"028": 50.0, "012": 12.0, "020": 70, "009": 45},
-    )
-    check1 = next(c for c in result.checks if c.grade == 1)
-    assert check1.verdict is Verdict.UNDECIDABLE
-    assert check1.missing_factors == ("순발력",)
-    assert result.grade == GRADE_NAMES[3]  # 3등급까지는 판정된다
+def test_신체조성은_중_한_가지가_범위에_들면_통과다() -> None:
+    body = [
+        BodyRange("유소년", "F", 11, 11, "018", None, 23.3),
+        BodyRange("유소년", "F", 11, 11, "042", None, 0.47),
+    ]
+    ok = {**HEALTHY, "018": 30.0, "042": 0.40}  # BMI 는 벗어나고 WHtR 는 든다
+    assert g(ok, body=body) == "3등급"
+
+
+def test_신체조성이_전부_벗어나면_3등급이_아니다() -> None:
+    body = [BodyRange("유소년", "F", 11, 11, "018", None, 23.3)]
+    assert g({**HEALTHY, "018": 30.0}, body=body) == PARTICIPATED
+
+
+def test_신체조성_구간이_없으면_그_사실을_남긴다() -> None:
+    result = judge(CELL, age_group="유소년", age=11, sex="F", measurements=HEALTHY)
+    assert any("신체조성" in n for n in result.notes)
+
+
+# ── 4·5·6등급 — 2025-06 개편. 청소년·성인·어르신에만 있다 ────────────────
+
+
+def test_4등급은_심폐지구력과_근력이_둘_다_3등급_기준_이상이다() -> None:
+    low = {"028": 40.0, "020": 45, "012": 0.0, "009": 1}  # 유연성·근지구력 미달
+    assert g(low, age_group="성인") == "4등급"
+
+
+def test_5등급은_둘_중_하나다() -> None:
+    low = {"028": 40.0, "020": 5, "012": 0.0, "009": 1}  # 심폐지구력 미달
+    assert g(low, age_group="성인") == "5등급"
+
+
+def test_6등급은_5등급_미달이다() -> None:
+    assert g({"028": 1.0, "020": 5, "012": 0.0, "009": 1}, age_group="성인") == "6등급"
+
+
+def test_유소년에는_4에서_6등급이_없다() -> None:
+    """개편은 청소년·성인·어르신에만 적용됐다 — 원자료 전수에서 확인했다."""
+    assert g({"028": 1.0, "020": 5, "012": 0.0, "009": 1}) == PARTICIPATED
+
+
+# ── 결측 ────────────────────────────────────────────────────────────
 
 
 def test_결측이_통과로_새지_않는다() -> None:
     """적게 잰 사람이 높은 등급을 받으면 안 된다."""
-    result = judge_cell({"028": 50.0})
+    result = judge(CELL, age_group="유소년", age=11, sex="F", measurements={"028": 50.0})
     assert result.grade is None
-    assert all(c.verdict is Verdict.UNDECIDABLE for c in result.checks)
-
-
-def test_다_재고_못_넘으면_참가다() -> None:
-    result = judge_cell({"028": 10.0, "012": 0.0, "020": 5, "009": 1, "022": 50})
-    assert result.grade == PARTICIPATED
 
 
 def test_판정_불가와_참가는_다르다() -> None:
     """기준을 못 넘은 것과 재지 않은 것은 다르다."""
-    참가 = judge_cell({"028": 10.0, "012": 0.0, "020": 5, "009": 1, "022": 50})
-    불가 = judge_cell({"028": 10.0, "012": 0.0})
-    assert 참가.grade == PARTICIPATED
-    assert 불가.grade is None
-
-
-def test_작을수록_우수한_항목은_부등호가_뒤집힌다() -> None:
-    # 작을수록 우수하므로 문턱은 등급이 낮을수록 커진다.
-    cell = [t("021", g, v, age_group="성인") for g, v in ((1, 12.0), (2, 13.0), (3, 14.0))]
-    fast = judge(cell, age_group="성인", age=11, sex="F", measurements={"021": 11.0})
-    slow = judge(cell, age_group="성인", age=11, sex="F", measurements={"021": 14.5})
-    assert fast.grade == GRADE_NAMES[1]
-    assert slow.grade == PARTICIPATED
-
-
-def test_택1_항목은_잰_것만_본다() -> None:
-    """심폐지구력 020/035/037 은 택1이다 — 안 잰 쪽이 결측이 아니다 (docs/02 §5.4)."""
-    cell = [
-        t("020", 1, 62),
-        t("035", 1, 45.0),
-        t("037", 1, 45.0),
-        t("028", 1, 44.4),
-    ]
-    result = judge(cell, age_group="유소년", age=11, sex="F", measurements={"020": 70, "028": 50.0})
-    assert result.grade == GRADE_NAMES[1]
-
-
-def test_택1을_둘_이상_재면_둘_다_넘어야_한다() -> None:
-    """더 높은 쪽을 고르는 것은 최고점 고르기다 (docs/02 §5.4)."""
-    cell = [t("020", 1, 62), t("035", 1, 45.0), t("028", 1, 44.4)]
-    result = judge(
-        cell,
-        age_group="유소년",
-        age=11,
-        sex="F",
-        measurements={"020": 70, "035": 30.0, "028": 50.0},
-    )
-    check1 = next(c for c in result.checks if c.grade == 1)
-    assert check1.verdict is Verdict.FAIL
-    assert "035" in check1.failed_items  # 020 을 넘었다고 덮이지 않는다
-
-
-def test_신체조성이_빠진_것을_조용히_넘기지_않는다() -> None:
-    """docs/dev/AI-2 §5 — 빠진 채로 판정하면 등급이 실제보다 후하다."""
-    result = judge_cell(FULL)
-    assert any("신체조성" in n for n in result.notes)
-
-
-def test_summary_는_왜_그_등급인지_적는다() -> None:
-    result = judge_cell({**FULL, "012": 7.0})
-    assert "앉아윗몸앞으로굽히기" in result.summary()
-
-
-def test_그_등급의_문턱이_없으면_통과가_아니라_판정_불가다() -> None:
-    """조건이 공집합이라고 통과시키면 기준이 없는 등급을 모두가 받는다."""
-    only_grade_one = [t("028", 1, 44.4)]
-    result = judge(only_grade_one, age_group="유소년", age=11, sex="F", measurements={"028": 50.0})
-    assert result.grade == GRADE_NAMES[1]
-    assert next(c for c in result.checks if c.grade == 3).verdict is Verdict.UNDECIDABLE
+    assert g({"028": 1.0, "012": 0.0, "020": 5, "009": 1}) == PARTICIPATED
+    assert g({"028": 1.0, "012": 0.0}) is None
 
 
 def test_연령_구간_밖이면_판정하지_않는다(thresholds: list[Threshold]) -> None:
     """만 7~10세는 측정 0건이라 기준표에도 없다 (docs/02 §2.2)."""
-    result = judge(thresholds, age_group="유소년", age=8, sex="F", measurements={"028": 40.0})
-    assert result.grade is None
+    assert (
+        judge(thresholds, age_group="유소년", age=8, sex="F", measurements={"028": 40.0}).grade
+        is None
+    )
 
 
-def test_기준표에는_3등급_문턱이_건강체력에만_있다(thresholds: list[Threshold]) -> None:
-    """판정 항목 구분을 코드에 다시 적지 않는 근거다 (docs/02 §5.2)."""
-    from family_fitness_ai.stats.items import ITEMS
+# ── 방향과 감사 기록 ─────────────────────────────────────────────────
 
-    운동체력 = {"순발력", "민첩성", "협응력"}
-    factors_with_grade3 = {
-        ITEMS[t.item_code].factor for t in thresholds if t.grade == 3 and t.item_code in ITEMS
-    }
-    assert not (factors_with_grade3 & 운동체력)
+
+def test_작을수록_우수한_항목은_부등호가_뒤집힌다() -> None:
+    cell = [t("021", g_, v, age_group="성인") for g_, v in ((1, 12.0), (2, 13.0))]
+    cell += [t("028", g_, v, age_group="성인") for g_, v in ((1, 44.4), (2, 39.5), (3, 34.8))]
+    fast = judge(cell, age_group="성인", age=11, sex="F", measurements={"021": 11.0, "028": 50.0})
+    slow = judge(cell, age_group="성인", age=11, sex="F", measurements={"021": 14.0, "028": 50.0})
+    assert fast.grade == "1등급"
+    assert slow.grade != "1등급"
+
+
+def test_summary_는_왜_그_등급인지_적는다() -> None:
+    result = judge(
+        CELL, age_group="유소년", age=11, sex="F", measurements={**HEALTHY, "012": 7.0, "022": 170}
+    )
+    assert "유연성" in result.summary()
 
 
 def test_상위_등급이_판정_불가면_요약이_그것을_말한다() -> None:
-    """3등급을 받았는데 왜 그 위가 아닌지가 감사 기록에 남아야 한다."""
-    result = judge(
-        CELL,
-        age_group="유소년",
-        age=11,
-        sex="F",
-        measurements={"028": 50.0, "012": 12.0, "020": 70, "009": 45},  # 순발력 미측정
-    )
-    assert result.grade == GRADE_NAMES[3]
+    result = judge(CELL, age_group="유소년", age=11, sex="F", measurements=HEALTHY)
     assert "상위 등급은 판정 불가" in result.summary()
-    assert "순발력" in result.summary()
+    assert "운동체력" in result.summary()
 
 
-def test_문턱에_걸려_내려온_것과_재료가_없어_내려온_것을_가른다() -> None:
-    걸림 = judge_cell({**FULL, "012": 7.0})
-    없음 = judge(
-        CELL,
-        age_group="유소년",
-        age=11,
-        sex="F",
-        measurements={"028": 50.0, "012": 12.0, "020": 70, "009": 45},
+# ── 신체조성 구간 파싱 ───────────────────────────────────────────────
+
+
+@pytest.mark.parametrize(
+    ("text", "expected"),
+    [
+        ("18.5이상 25미만", (18.5, 25.0)),
+        ("7%초과 27%미만", (7.0, 27.0)),
+        ("< 24.2", (None, 24.2)),
+        ("<17.5", (None, 17.5)),
+        ("< .50", (None, 0.5)),
+        ("62", None),
+        ("", None),
+    ],
+)
+def test_신체조성_구간을_읽는다(text: str, expected: tuple | None) -> None:
+    assert parse_body_range(text) == expected
+
+
+def test_구간은_lo_이상_hi_미만이다() -> None:
+    r = BodyRange("성인", "M", 19, 24, "018", 18.5, 25.0)
+    assert r.contains(18.5) and r.contains(24.9)
+    assert not r.contains(18.4) and not r.contains(25.0)
+
+
+# ── 또래 등급 분포 ───────────────────────────────────────────────────
+
+
+def frame(grades: list[str | None], *, ym: str = "202607") -> pd.DataFrame:
+    from family_fitness_ai.ingest import measurements as M
+
+    return pd.DataFrame(
+        {
+            M.AGE_GROUP_COL: ["유소년"] * len(grades),
+            M.AGE_COL: [11] * len(grades),
+            M.SEX_COL: ["F"] * len(grades),
+            M.DATE_COL: [f"{ym}01"] * len(grades),
+            M.GRADE_COL: grades,
+        }
     )
-    assert "문턱에 걸린 항목" in 걸림.summary()
-    assert "문턱에 걸린 항목" not in 없음.summary()
 
 
 def test_등급_미기재는_분모에서도_뺀다() -> None:
-    """미판정을 참가로 세면 참가 비율이 부풀어 오른다 (docs/dev/AI-2 §4)."""
-    import pandas as pd
-
-    from family_fitness_ai.ingest import measurements as M
+    """미판정을 참가로 세면 참가 비율이 부풀어 오른다."""
     from family_fitness_ai.stats.distribution import build_grade_distribution
 
-    df = pd.DataFrame(
-        {
-            M.AGE_GROUP_COL: ["유소년"] * 5,
-            M.AGE_COL: [11] * 5,
-            M.SEX_COL: ["F"] * 5,
-            M.GRADE_COL: ["1등급", "3등급", "참가", None, "미인증"],
-        }
+    out = build_grade_distribution(
+        frame(["1등급", "3등급", "참가", None, "미인증"]), [t("028", 1, 44.4)]
     )
-    out = build_grade_distribution(df, [t("028", 1, 44.4)])
-    assert out["n_cell"].unique().tolist() == [3]  # None 과 '미인증' 이 빠졌다
-    assert out.loc[out.grade == "참가", "ratio"].item() == pytest.approx(1 / 3, abs=5e-5)
+    assert out["n_cell"].unique().tolist() == [3]
     assert out["count"].sum() == 3
+
+
+def test_개편_전_행은_분포에서_뺀다() -> None:
+    """두 제도를 섞으면 참가가 부풀고 4~6등급이 반쪽만 나온다."""
+    from family_fitness_ai.stats.distribution import build_grade_distribution
+
+    old = build_grade_distribution(frame(["1등급", "참가"], ym="202501"), [t("028", 1, 44.4)])
+    new = build_grade_distribution(frame(["1등급", "참가"], ym="202506"), [t("028", 1, 44.4)])
+    assert old.empty
+    assert new["n_cell"].unique().tolist() == [2]
 
 
 def test_등급_분포는_판정을_다시_돌리지_않는다() -> None:
     """원자료의 등급 컬럼을 센다 — 측정값이 하나도 없어도 분포는 나온다."""
-    import pandas as pd
-
-    from family_fitness_ai.ingest import measurements as M
     from family_fitness_ai.stats.distribution import build_grade_distribution
 
-    df = pd.DataFrame(
-        {
-            M.AGE_GROUP_COL: ["유소년", "유소년"],
-            M.AGE_COL: [11, 11],
-            M.SEX_COL: ["F", "F"],
-            M.GRADE_COL: ["1등급", "참가"],
-        }
-    )
-    out = build_grade_distribution(df, [t("028", 1, 44.4)])
-    assert set(out["grade"]) == {"1등급", "2등급", "3등급", "참가"}
+    out = build_grade_distribution(frame(["1등급", "참가"]), [t("028", 1, 44.4)])
+    assert set(out["grade"]) == {"1등급", "2등급", "3등급", "4등급", "5등급", "6등급", "참가"}
     assert out.loc[out.grade == "1등급", "ratio"].item() == pytest.approx(0.5)

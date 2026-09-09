@@ -26,6 +26,7 @@ from .score import Anchors, score
 DEFAULT_RELEASE = Path("data/release")
 BAND_STRENGTH, BAND_GROWTH = 75, 25
 CRITERIA_FILE = "grade_thresholds.csv"
+BODY_RANGES_FILE = "body_composition_ranges.csv"
 
 
 @dataclass(frozen=True)
@@ -64,6 +65,11 @@ class Reference:
         # 문턱은 등급 판정이 쓴다 (docs/dev/AI-2 §1). 없으면 점수만 낸다.
         criteria_path = root / CRITERIA_FILE
         self.thresholds: list[C.Threshold] = C.load(criteria_path) if criteria_path.exists() else []
+        # 신체조성은 3등급 판정에만 쓴다. 응답에 수치로 나가지 않는다 (docs/02 §3).
+        body_path = root / BODY_RANGES_FILE
+        self.body_ranges: list[C.BodyRange] = (
+            C.load_body_ranges_csv(body_path) if body_path.exists() else []
+        )
 
         summary = pd.read_csv(root / "age_band_score_summary.csv", encoding="utf-8-sig")
         summary = summary[summary["status"] == "ok"]
@@ -221,6 +227,7 @@ def assess(
             age=age,
             sex=sex,
             measurements=measurements,
+            body_ranges=ref.body_ranges,
         )
         if ref.thresholds
         else G.GradeResult(grade=None)

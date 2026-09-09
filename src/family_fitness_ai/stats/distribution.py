@@ -27,6 +27,17 @@ from .score import Anchors, build_anchors, score
 
 # 기준표는 레포에 커밋되어 있다. 원자료 zip 에는 측정 기록만 담긴다 (docs/02 §3.1).
 DEFAULT_CRITERIA = Path("data/release/grade_thresholds.csv")
+# 신체조성은 문턱이 아니라 구간이라 표를 따로 둔다 (docs/dev/AI-2 §6).
+BODY_RANGES_FILE = "body_composition_ranges.csv"
+
+
+def _body_ranges(args) -> list:  # noqa: ANN001 — argparse Namespace
+    """원본 xlsx 가 있으면 거기서, 없으면 커밋된 표에서 읽는다."""
+    if Path(args.criteria).suffix.lower() in (".xlsx", ".xlsm"):
+        return C.load_body_ranges_xlsx(args.criteria)
+    committed = Path(args.out) / BODY_RANGES_FILE
+    return C.load_body_ranges_csv(committed) if committed.exists() else []
+
 
 BIN_EDGES = np.arange(0, 101, 10)
 QUANTILES = (10, 25, 50, 75, 90)
@@ -164,7 +175,19 @@ def build(
     )
 
 
-GRADE_ORDER = ("1등급", "2등급", "3등급", G.PARTICIPATED)
+# 원자료에 실제로 있는 등급 전부. 4·5·6등급은 2025-06 개편으로 생겼고 청소년·성인·
+# 어르신에만 나타난다 — 빠뜨리면 그 연령대 분포에서 18만 행이 통째로 사라진다.
+GRADE_ORDER = ("1등급", "2등급", "3등급", "4등급", "5등급", "6등급", G.PARTICIPATED)
+
+# 2025-06 등급체계 개편. 그 전에는 4·5·6등급이 없어 지금의 4~6등급에 해당하는 사람이
+# 전부 `참가` 로 기록됐다. **두 제도를 섞어 분포를 내면 안 된다** — 섞으면 `참가` 가
+# 부풀고, 자기 등급을 그 분포 위에 올려 읽는 것이 틀린다 (docs/dev/AI-2 §5.3).
+REFORM_YM = "202506"
+
+
+def current_standard(df: pd.DataFrame) -> pd.DataFrame:
+    """현행 등급체계로 기록된 행만. 기준 기간을 화면·리포트에 명시한다 (docs/02 §1.2)."""
+    return df[df[M.DATE_COL].astype(str).str[:6] >= REFORM_YM]
 
 
 def build_grade_distribution(df: pd.DataFrame, thresholds: list[C.Threshold]) -> pd.DataFrame:
@@ -175,6 +198,7 @@ def build_grade_distribution(df: pd.DataFrame, thresholds: list[C.Threshold]) ->
     읽지 못한다 (docs/dev/AI-2 §2).
     """
     rows: list[dict] = []
+    df = current_standard(df)
     for age_group, group_df in df.groupby(M.AGE_GROUP_COL, sort=False):
         for lo, hi in _bands(thresholds, str(age_group)):
             band_df = group_df[(group_df[M.AGE_COL] >= lo) & (group_df[M.AGE_COL] <= hi)]
@@ -205,19 +229,26 @@ def build_grade_distribution(df: pd.DataFrame, thresholds: list[C.Threshold]) ->
     return pd.DataFrame(rows)
 
 
-def concordance(df: pd.DataFrame, thresholds: list[C.Threshold], *, sample: int = 20000) -> dict:
+def concordance(
+    df: pd.DataFrame,
+    thresholds: list[C.Threshold],
+    body_ranges: list[C.BodyRange] | None = None,
+    *,
+    sample: int = 20000,
+) -> dict:
     """우리 판정과 공단 기록이 얼마나 같은가. **판정 로직의 검사다.**
 
     전수를 돌리면 오래 걸리므로 표본을 본다. 파일로 만들지 않는다 — 매번 달라지는
     진단값이고 커밋할 산출물이 아니다 (docs/dev/AI-2 §4).
     """
-    graded = df[df[M.GRADE_COL].isin(GRADE_ORDER)]
+    graded = current_standard(df)
+    graded = graded[graded[M.GRADE_COL].isin(GRADE_ORDER)]
     if graded.empty:
         return {"n": 0}
     if len(graded) > sample:
         graded = graded.sample(sample, random_state=0)
 
-    item_columns = {code: M._item_column(code) for code in ITEMS}
+    item_columns = {code: M._item_column(code) for code in (*ITEMS, *M.BODY_COMPOSITION_CODES)}
     agree = disagree_generous = disagree_strict = undecidable = 0
     for row in graded.itertuples(index=False):
         values = {
@@ -231,6 +262,7 @@ def concordance(df: pd.DataFrame, thresholds: list[C.Threshold], *, sample: int 
             age=int(getattr(row, M.AGE_COL)),
             sex=str(getattr(row, M.SEX_COL)),
             measurements=values,
+            body_ranges=body_ranges,
         ).grade
         theirs = str(getattr(row, M.GRADE_COL))
         if ours is None:
@@ -272,6 +304,7 @@ def main(argv: list[str] | None = None) -> int:
 
     df = M.load_dir(args.data_dir)
     thresholds = C.load(args.criteria)
+    body_ranges = _body_ranges(args)
     summary, dist, quantiles = build(df, thresholds)
 
     out = Path(args.out)
@@ -281,6 +314,10 @@ def main(argv: list[str] | None = None) -> int:
     dist.to_csv(out / "age_band_score_distribution.csv", index=False, encoding="utf-8-sig")
     quantiles.to_csv(out / "age_band_value_quantiles.csv", index=False, encoding="utf-8-sig")
     C.to_frame(thresholds).to_csv(out / "grade_thresholds.csv", index=False, encoding="utf-8-sig")
+    if body_ranges:
+        C.body_ranges_to_frame(body_ranges).to_csv(
+            out / BODY_RANGES_FILE, index=False, encoding="utf-8-sig"
+        )
     grades = build_grade_distribution(df, thresholds)
     grades.to_csv(out / "age_band_grade_distribution.csv", index=False, encoding="utf-8-sig")
 
@@ -295,7 +332,7 @@ def main(argv: list[str] | None = None) -> int:
     print(f"분위수 {len(quantiles):,}행 → {out / 'age_band_value_quantiles.csv'}")
     print(f"등급분포 {len(grades):,}행 → {out / 'age_band_grade_distribution.csv'}")
 
-    report = concordance(df, thresholds)
+    report = concordance(df, thresholds, body_ranges)
     if report["n"]:
         print(
             f"\n[판정 대조] 표본 {report['n']:,}명 중 판정 불가 {report['undecidable']:,}"

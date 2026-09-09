@@ -21,6 +21,47 @@ _AGE_MAX = 120  # '85이상' 같은 열린 구간의 상한. 분포 산출에서
 
 
 @dataclass(frozen=True)
+class BodyRange:
+    """신체조성 기준. 문턱이 아니라 **구간**이라 별도 표로 둔다 (docs/dev/AI-2 §6).
+
+    `lo` 이상 `hi` 미만이면 통과다. 한쪽만 있는 칸(`< 24.2`)은 다른 쪽이 `None` 이다.
+    시트의 `초과`/`이상` 구분은 경계값 한 점의 차이라 구별하지 않는다.
+    """
+
+    age_group: str
+    sex: str
+    age_lo: int
+    age_hi: int
+    item_code: str
+    lo: float | None
+    hi: float | None
+
+    def contains(self, value: float) -> bool:
+        return (self.lo is None or value >= self.lo) and (self.hi is None or value < self.hi)
+
+
+# 시트의 신체조성 열 머리글 → 항목 코드. 연령대마다 재는 것이 다르다.
+BODY_COLUMNS = {"BMI": "018", "체지방률": "003", "WHtR": "042", "허리둘레": "042"}
+
+_RANGE_BOTH = re.compile(r"([\d.]+)\s*%?\s*(?:이상|초과)\s*([\d.]+)\s*%?\s*미만")
+_RANGE_UPPER = re.compile(r"^<\s*([\d.]+)$")
+
+
+def parse_body_range(raw: object) -> tuple[float | None, float | None] | None:
+    """'18.5이상 25미만' · '7%초과 27%미만' · '< 24.2' · '< .50' 을 구간으로."""
+    if raw is None:
+        return None
+    text = " ".join(str(raw).split())
+    if not text:
+        return None
+    if m := _RANGE_BOTH.search(text):
+        return (float(m.group(1)), float(m.group(2)))
+    if m := _RANGE_UPPER.match(text):
+        return (None, float(m.group(1)))
+    return None
+
+
+@dataclass(frozen=True)
 class Threshold:
     age_group: str
     sex: str
@@ -96,6 +137,90 @@ def load_xlsx(xlsx_path: str | Path) -> list[Threshold]:
                 for code in codes:
                     out.append(Threshold(age_group, sex, band[0], band[1], code, grade, value))
     return out
+
+
+def load_body_ranges_xlsx(xlsx_path: str | Path) -> list[BodyRange]:
+    """기준표 원본에서 신체조성 구간을 읽는다. **3등급 행에만 있다.**
+
+    시트에서 1·2등급 행의 BMI·체지방률 칸은 비어 있다 — 신체조성은 3등급 판정에만
+    쓰인다 (docs/dev/AI-2 §6). 병합 셀이라 값을 각 행에 채워 넣고 읽는다.
+    """
+    wb = openpyxl.load_workbook(xlsx_path, data_only=True)
+    out: list[BodyRange] = []
+
+    for sheet in wb.worksheets:
+        age_group = I.SHEET_TO_AGE_GROUP.get(sheet.title)
+        if age_group not in I.SCORED_AGE_GROUPS:
+            continue
+        grid = [[c.value for c in row] for row in sheet.iter_rows()]
+        for rng in sheet.merged_cells.ranges:
+            value = grid[rng.min_row - 1][rng.min_col - 1]
+            for r in range(rng.min_row - 1, rng.max_row):
+                for c in range(rng.min_col - 1, rng.max_col):
+                    grid[r][c] = value
+
+        header = [I.normalise_header(v) for v in grid[2]]
+        col_of = {
+            idx: code
+            for idx, text in enumerate(header)
+            for key, code in BODY_COLUMNS.items()
+            if key in text
+        }
+        for row in grid[3:]:
+            if not (row[0] and "3등급" in str(row[0])):
+                continue
+            sex = _SEX.get(str(row[1] or "").strip())
+            band = parse_age_band(row[2])
+            if sex is None or band is None:
+                continue
+            for idx, code in col_of.items():
+                parsed = parse_body_range(row[idx])
+                if parsed is None:
+                    continue
+                out.append(BodyRange(age_group, sex, band[0], band[1], code, *parsed))
+    return out
+
+
+def body_ranges_to_frame(ranges: list[BodyRange]):
+    import pandas as pd
+
+    return pd.DataFrame(
+        [
+            {
+                "age_group": r.age_group,
+                "sex": r.sex,
+                "age_lo": r.age_lo,
+                "age_hi": r.age_hi,
+                "age_unit": "개월" if r.age_group == "유아기" else "세",
+                "item_code": r.item_code,
+                "item_name": {"018": "BMI", "003": "체지방률", "042": "WHtR"}[r.item_code],
+                "range_lo": "" if r.lo is None else r.lo,
+                "range_hi": "" if r.hi is None else r.hi,
+            }
+            for r in ranges
+        ]
+    ).sort_values(["age_group", "sex", "age_lo", "item_code"])
+
+
+def load_body_ranges_csv(csv_path: str | Path) -> list[BodyRange]:
+    import csv as _csv
+
+    def num(text: str) -> float | None:
+        return float(text) if text not in ("", None) else None
+
+    with open(csv_path, encoding="utf-8-sig", newline="") as fh:
+        return [
+            BodyRange(
+                age_group=r["age_group"],
+                sex=r["sex"],
+                age_lo=int(r["age_lo"]),
+                age_hi=int(r["age_hi"]),
+                item_code=r["item_code"],
+                lo=num(r["range_lo"]),
+                hi=num(r["range_hi"]),
+            )
+            for r in _csv.DictReader(fh)
+        ]
 
 
 def to_frame(thresholds: list[Threshold]):
