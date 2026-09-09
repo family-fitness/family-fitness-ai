@@ -18,6 +18,10 @@ SEX_COL = "SEXDSTN_FLAG_CD"
 GRADE_COL = "CRTFC_FLAG_NM"
 DATE_COL = "MESURE_DE"
 
+# 점수화하지 않지만 3등급 판정에 쓴다 (docs/02 §5.2 vs §5.4). 응답에 수치로
+# 나가지 않는다 (docs/02 §3).
+BODY_COMPOSITION_CODES = ("003", "018", "042")
+
 
 def _item_column(code: str) -> str:
     return f"MESURE_IEM_{code}_VALUE"
@@ -49,7 +53,7 @@ def load_dir(data_dir: str | Path) -> pd.DataFrame:
         raise FileNotFoundError(_no_csv_message(root))
 
     keep = [AGE_GROUP_COL, AGE_COL, SEX_COL, GRADE_COL, DATE_COL]
-    item_cols = [_item_column(c) for c in ITEMS]
+    item_cols = [_item_column(c) for c in (*ITEMS, *BODY_COMPOSITION_CODES)]
 
     frames = []
     for path in paths:

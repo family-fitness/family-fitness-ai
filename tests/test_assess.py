@@ -60,7 +60,9 @@ def test_한_사람을_채점한다(ref: Reference) -> None:
     assert got.age_group == "유소년"
     assert got.input_level == "L2"
     assert [f.item_code for f in got.factors] == ["028", "012", "020"]
-    assert got.not_scored == ["018"]  # 신체조성은 점수화하지 않는다
+    # 신체조성은 점수화하지 않지만 등급 판정에는 쓴다 — 안 쓰인 것과 구분한다
+    assert got.not_scored == []
+    assert got.body_composition == ["018"]
     assert got.factors[0].score > got.factors[-1].score  # 점수 내림차순
     assert got.focus_one == got.factors[-1].factor
 
@@ -74,3 +76,28 @@ def test_점수를_낼_수_없는_나이는_사유를_준다(ref: Reference) -> 
 def test_산출물이_없으면_바로_멈춘다(tmp_path: pathlib.Path) -> None:
     with pytest.raises(FileNotFoundError, match="산출물이 없다"):
         Reference(tmp_path)
+
+
+def test_표가_터미널_폭으로_정렬된다() -> None:
+    """한글은 두 칸이다. 문자 수로 채우면 항목명 길이가 다른 행에서 어긋난다."""
+    from family_fitness_ai.stats.assess import FactorScore, _width, table
+
+    def fs(factor: str, name: str, value: float, score: float) -> FactorScore:
+        return FactorScore(factor, "000", name, "회", value, score, 50, "steady", 100)
+
+    lines = table(
+        [
+            fs("심폐지구력", "왕복오래달리기", 70, 85.9),
+            fs("유연성", "앉아윗몸앞으로굽히기", 4.0, 45.3),
+            fs("근력", "상대악력", 41.3, 67.6),
+        ]
+    )
+    assert len({_width(x) for x in lines[2:]}) == 1  # 자료 행의 폭이 모두 같다
+    assert _width(lines[1]) == max(_width(x) for x in lines)  # 구분선이 표 전체 폭
+    assert not any(x != x.rstrip() for x in lines)  # 줄 끝 공백을 남기지 않는다
+
+
+def test_빈_표는_줄을_내지_않는다() -> None:
+    from family_fitness_ai.stats.assess import table
+
+    assert table([]) == []
