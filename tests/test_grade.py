@@ -113,26 +113,16 @@ def test_신체조성_구간이_없으면_그_사실을_남긴다() -> None:
     assert any("신체조성" in n for n in result.notes)
 
 
-# ── 4·5·6등급 — 2025-06 개편. 청소년·성인·어르신에만 있다 ────────────────
+# ── 3등급 미달은 참가다. 4·5·6등급은 내지 않는다 ─────────────────────
 
 
-def test_4등급은_심폐지구력과_근력이_둘_다_3등급_기준_이상이다() -> None:
-    low = {"028": 40.0, "020": 45, "012": 0.0, "009": 1}  # 유연성·근지구력 미달
-    assert g(low, age_group="성인") == "4등급"
-
-
-def test_5등급은_둘_중_하나다() -> None:
-    low = {"028": 40.0, "020": 5, "012": 0.0, "009": 1}  # 심폐지구력 미달
-    assert g(low, age_group="성인") == "5등급"
-
-
-def test_6등급은_5등급_미달이다() -> None:
-    assert g({"028": 1.0, "020": 5, "012": 0.0, "009": 1}, age_group="성인") == "6등급"
-
-
-def test_유소년에는_4에서_6등급이_없다() -> None:
-    """개편은 청소년·성인·어르신에만 적용됐다 — 원자료 전수에서 확인했다."""
+def test_3등급에_못_미치면_참가다() -> None:
     assert g({"028": 1.0, "020": 5, "012": 0.0, "009": 1}) == PARTICIPATED
+
+
+def test_성인도_참가까지만_낸다() -> None:
+    """공단은 3등급 아래를 4·5·6으로 쪼개지만 계약의 grade 는 넷이다."""
+    assert g({"028": 1.0, "020": 5, "012": 0.0, "009": 1}, age_group="성인") == PARTICIPATED
 
 
 # ── 결측 ────────────────────────────────────────────────────────────
@@ -236,20 +226,33 @@ def test_등급_미기재는_분모에서도_뺀다() -> None:
     assert out["count"].sum() == 3
 
 
-def test_개편_전_행은_분포에서_뺀다() -> None:
-    """두 제도를 섞으면 참가가 부풀고 4~6등급이 반쪽만 나온다."""
-    from family_fitness_ai.stats.distribution import build_grade_distribution
-
-    old = build_grade_distribution(frame(["1등급", "참가"], ym="202501"), [t("028", 1, 44.4)])
-    new = build_grade_distribution(frame(["1등급", "참가"], ym="202506"), [t("028", 1, 44.4)])
-    assert old.empty
-    assert new["n_cell"].unique().tolist() == [2]
-
-
 def test_등급_분포는_판정을_다시_돌리지_않는다() -> None:
     """원자료의 등급 컬럼을 센다 — 측정값이 하나도 없어도 분포는 나온다."""
     from family_fitness_ai.stats.distribution import build_grade_distribution
 
     out = build_grade_distribution(frame(["1등급", "참가"]), [t("028", 1, 44.4)])
-    assert set(out["grade"]) == {"1등급", "2등급", "3등급", "4등급", "5등급", "6등급", "참가"}
+    assert set(out["grade"]) == {"1등급", "2등급", "3등급", "참가"}
     assert out.loc[out.grade == "1등급", "ratio"].item() == pytest.approx(0.5)
+
+
+def test_4에서_6등급은_참가로_접는다() -> None:
+    """셋 다 3등급 미달이라 뜻이 바뀌지 않는다. 접으면 개편 전후가 같은 눈금이다."""
+    from family_fitness_ai.stats.distribution import build_grade_distribution, fold_grades
+
+    assert list(fold_grades(pd.Series(["4등급", "5등급", "6등급", "3등급"]))) == [
+        "참가",
+        "참가",
+        "참가",
+        "3등급",
+    ]
+    out = build_grade_distribution(frame(["4등급", "5등급", "6등급", "1등급"]), [t("028", 1, 44.4)])
+    assert out.loc[out.grade == "참가", "count"].item() == 3
+    assert out["n_cell"].unique().tolist() == [4]
+
+
+def test_개편_전_행도_분포에_넣는다() -> None:
+    """접고 나면 두 제도가 같은 눈금이라 기간을 자를 이유가 없다."""
+    from family_fitness_ai.stats.distribution import build_grade_distribution
+
+    old = build_grade_distribution(frame(["1등급", "참가"], ym="202501"), [t("028", 1, 44.4)])
+    assert old["n_cell"].unique().tolist() == [2]

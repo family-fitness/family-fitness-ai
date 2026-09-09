@@ -175,19 +175,18 @@ def build(
     )
 
 
-# 원자료에 실제로 있는 등급 전부. 4·5·6등급은 2025-06 개편으로 생겼고 청소년·성인·
-# 어르신에만 나타난다 — 빠뜨리면 그 연령대 분포에서 18만 행이 통째로 사라진다.
-GRADE_ORDER = ("1등급", "2등급", "3등급", "4등급", "5등급", "6등급", G.PARTICIPATED)
+# 계약의 등급 넷 (docs/03 §3.4).
+GRADE_ORDER = ("1등급", "2등급", "3등급", G.PARTICIPATED)
 
-# 2025-06 등급체계 개편. 그 전에는 4·5·6등급이 없어 지금의 4~6등급에 해당하는 사람이
-# 전부 `참가` 로 기록됐다. **두 제도를 섞어 분포를 내면 안 된다** — 섞으면 `참가` 가
-# 부풀고, 자기 등급을 그 분포 위에 올려 읽는 것이 틀린다 (docs/dev/AI-2 §5.3).
-REFORM_YM = "202506"
+# 공단은 2025-06 개편으로 3등급 아래를 4·5·6등급으로 쪼갰다. 우리는 그 셋을 내지
+# 않으므로 `참가` 로 접는다 — 셋 다 "3등급 미달"이라 뜻이 바뀌지 않고, 접으면
+# 개편 전후 데이터가 같은 눈금 위에 놓인다 (docs/dev/AI-2 §5.3).
+FOLDED_INTO_PARTICIPATED = ("4등급", "5등급", "6등급")
 
 
-def current_standard(df: pd.DataFrame) -> pd.DataFrame:
-    """현행 등급체계로 기록된 행만. 기준 기간을 화면·리포트에 명시한다 (docs/02 §1.2)."""
-    return df[df[M.DATE_COL].astype(str).str[:6] >= REFORM_YM]
+def fold_grades(series: pd.Series) -> pd.Series:
+    """원자료의 등급 표기를 계약의 넷으로 접는다. 그 밖의 값은 그대로 둔다."""
+    return series.replace(dict.fromkeys(FOLDED_INTO_PARTICIPATED, G.PARTICIPATED))
 
 
 def build_grade_distribution(df: pd.DataFrame, thresholds: list[C.Threshold]) -> pd.DataFrame:
@@ -198,7 +197,7 @@ def build_grade_distribution(df: pd.DataFrame, thresholds: list[C.Threshold]) ->
     읽지 못한다 (docs/dev/AI-2 §2).
     """
     rows: list[dict] = []
-    df = current_standard(df)
+    df = df.assign(**{M.GRADE_COL: fold_grades(df[M.GRADE_COL])})
     for age_group, group_df in df.groupby(M.AGE_GROUP_COL, sort=False):
         for lo, hi in _bands(thresholds, str(age_group)):
             band_df = group_df[(group_df[M.AGE_COL] >= lo) & (group_df[M.AGE_COL] <= hi)]
@@ -241,7 +240,7 @@ def concordance(
     전수를 돌리면 오래 걸리므로 표본을 본다. 파일로 만들지 않는다 — 매번 달라지는
     진단값이고 커밋할 산출물이 아니다 (docs/dev/AI-2 §4).
     """
-    graded = current_standard(df)
+    graded = df.assign(**{M.GRADE_COL: fold_grades(df[M.GRADE_COL])})
     graded = graded[graded[M.GRADE_COL].isin(GRADE_ORDER)]
     if graded.empty:
         return {"n": 0}

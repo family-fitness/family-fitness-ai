@@ -8,11 +8,14 @@
 | 1등급 | 건강체력이 **모두** 상위 30% · 운동체력 **중 한 가지**가 상위 30% |
 | 2등급 | 건강체력이 **모두** 상위 50% · 운동체력 **중 한 가지**가 상위 50% |
 | 3등급 | 건강체력이 **모두** 상위 70% · 신체조성 **중 한 가지**가 권장 범위 |
-| 4등급 | 심폐지구력 **과** 근력이 3등급 기준 이상 |
-| 5등급 | 심폐지구력 **또는** 근력이 3등급 기준 이상 |
-| 6등급 | 5등급 미달 |
+| 참가 | 3등급 미달 |
 
 문턱 표의 1·2·3등급 값이 각각 상위 30·50·70% 컷이다.
+
+**4·5·6등급은 내지 않는다.** 공단은 2025-06 개편으로 3등급 아래를 셋으로 쪼갰지만,
+계약(`../../docs/03` §3.4)의 `grade` 는 넷이다. 그 셋은 전부 "3등급 미달"이라
+`참가` 하나로 접힌다 — 접으면 개편 전후 데이터가 같은 눈금 위에 놓인다
+(docs/dev/AI-2 §5.3).
 
 **운동체력은 "중 한 가지"다.** 전부 요구하면 성인 반응시간처럼 문턱이 빡빡한 항목
 하나가 상위 등급을 통째로 막는다. 이것이 판정이 공단 기록보다 박했던 이유다.
@@ -35,11 +38,7 @@ from .items import ITEMS
 HEALTH_FACTORS = ("심폐지구력", "근력", "근지구력", "유연성")
 SKILL_FACTORS = ("민첩성", "순발력", "협응력")
 
-# 4·5·6등급은 2025-06 개편으로 생겼고 청소년·성인·어르신에만 있다. 유아기·유소년은
-# 3등급 아래가 `참가` 다 — 원자료 전수에서 확인했다 (docs/dev/AI-2 §5.3).
-EXTENDED_AGE_GROUPS = ("청소년", "성인", "어르신")
-
-GRADE_NAMES = {1: "1등급", 2: "2등급", 3: "3등급", 4: "4등급", 5: "5등급", 6: "6등급"}
+GRADE_NAMES = {1: "1등급", 2: "2등급", 3: "3등급"}
 PARTICIPATED = "참가"
 
 # 신체조성. 점수화하지 않지만 3등급 판정에는 쓴다 (docs/02 §5.2 vs §5.4).
@@ -77,7 +76,7 @@ class GradeResult:
             missing = sorted({f for c in self.checks for f in c.missing_factors})
             return f"등급 판정 불가 · 측정되지 않은 요인 {', '.join(missing) or '없음'}"
 
-        awarded = next((g for g, name in GRADE_NAMES.items() if name == self.grade), 99)
+        awarded = next((g for g, name in GRADE_NAMES.items() if name == self.grade), 99)  # 참가
         above = [c for c in self.checks if c.grade < awarded]
         parts = [f"등급 {self.grade}"]
 
@@ -201,19 +200,6 @@ def _check_third(
     return GradeCheck(3, Verdict.FAIL if failed else Verdict.PASS, (), tuple(failed))
 
 
-def _check_lower(grade: int, cell: list[Threshold], measurements: dict[str, float]) -> GradeCheck:
-    """4·5등급 — 심폐지구력과 근력을 3등급 기준으로 본다. 4는 AND, 5는 OR."""
-    by = _by_factor(cell, 3)
-    states = {f: _factor_state(by[f], measurements) for f in ("심폐지구력", "근력") if f in by}
-    if not states or all(s is None for s in states.values()):
-        return GradeCheck(grade, Verdict.UNDECIDABLE, ("심폐지구력", "근력"), ())
-    passed = [f for f, s in states.items() if s is True]
-    ok = len(passed) == len(states) if grade == 4 else bool(passed)
-    if ok:
-        return GradeCheck(grade, Verdict.PASS)
-    return GradeCheck(grade, Verdict.FAIL, (), tuple(f for f, s in states.items() if s is not True))
-
-
 def judge(
     thresholds: list[Threshold],
     *,
@@ -238,22 +224,19 @@ def judge(
         for r in (body_ranges or [])
         if r.age_group == age_group and r.sex == sex and r.age_lo <= age <= r.age_hi
     ]
-    extended = age_group in EXTENDED_AGE_GROUPS
-    checks = [_check_upper(1, cell, measurements), _check_upper(2, cell, measurements)]
-    checks.append(_check_third(cell, measurements, body))
-    if extended:
-        checks += [_check_lower(4, cell, measurements), _check_lower(5, cell, measurements)]
-    frozen = tuple(checks)
+    frozen = (
+        _check_upper(1, cell, measurements),
+        _check_upper(2, cell, measurements),
+        _check_third(cell, measurements, body),
+    )
     notes = _notes(body)
 
     for check in frozen:
         if check.verdict is Verdict.PASS:
             return GradeResult(GRADE_NAMES[check.grade], frozen, notes)
 
-    # 바닥 등급은 연령대에 따라 다르다. 유아기·유소년에는 4~6등급이 없다.
-    floor = frozen[-1]
-    if floor.verdict is Verdict.FAIL:
-        return GradeResult(GRADE_NAMES[6] if extended else PARTICIPATED, frozen, notes)
+    if frozen[-1].verdict is Verdict.FAIL:
+        return GradeResult(PARTICIPATED, frozen, notes)
     return GradeResult(None, frozen, notes)
 
 
