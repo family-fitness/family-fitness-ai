@@ -13,6 +13,8 @@ from pathlib import Path
 
 import openpyxl
 
+# 연령대 값의 정본은 계약이다 (docs/03 §2.4). stats 가 다시 적지 않는다.
+from ..common.types import SCORED_AGE_GROUPS
 from . import items as I
 
 _GRADE = re.compile(r"([123])\s*등급")
@@ -67,7 +69,7 @@ def load_xlsx(xlsx_path: str | Path) -> list[Threshold]:
 
     for sheet in wb.worksheets:
         age_group = I.SHEET_TO_AGE_GROUP.get(sheet.title)
-        if age_group not in I.SCORED_AGE_GROUPS:
+        if age_group not in SCORED_AGE_GROUPS:
             continue
         columns = I.CRITERIA_COLUMNS[age_group]
 

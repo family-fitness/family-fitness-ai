@@ -8,9 +8,6 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-# 점수를 내는 연령대. 어르신은 기준항목이 미정이라 제외한다 (docs/02 §6 ⑦).
-SCORED_AGE_GROUPS = ("유아기", "유소년", "청소년", "성인")
-
 # 기준표 시트 이름 ↔ 자료의 연령대 값. 시트는 '노년기', 자료는 '어르신'이다.
 SHEET_TO_AGE_GROUP = {
     "유아기": "유아기",
