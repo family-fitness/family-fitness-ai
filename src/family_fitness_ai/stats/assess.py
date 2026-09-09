@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import unicodedata
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
 
@@ -163,6 +164,7 @@ class Assessment:
     factors: list[FactorScore] = field(default_factory=list)
     focus_one: str | None = None
     not_scored: list[str] = field(default_factory=list)
+    body_composition: list[str] = field(default_factory=list)
     note: str | None = None
     grade: str | None = None
     grade_summary: str | None = None
@@ -212,7 +214,13 @@ def assess(
 
     factors: list[FactorScore] = []
     skipped: list[str] = []
+    body: list[str] = []
     for code, value in measurements.items():
+        # 신체조성은 점수화하지 않지만 등급 판정에는 쓴다 (docs/02 §5.2 vs §5.4).
+        # "기준항목이 아니다" 로 묶으면 쓰이지 않은 것처럼 읽힌다.
+        if code in G.BODY_COMPOSITION:
+            body.append(code)
+            continue
         cell = ref.cell(age_group, age, sex, code)
         if cell is None:
             skipped.append(code)
@@ -241,9 +249,53 @@ def assess(
         factors=factors,
         focus_one=factors[-1].factor if factors else None,
         not_scored=skipped,
+        body_composition=body,
         grade=verdict.grade,
         grade_summary=verdict.summary(),
     )
+
+
+def _width(text: str) -> int:
+    """터미널에서 차지하는 칸 수. 한글·전각은 두 칸이다.
+
+    `f"{text:<9}"` 는 **문자 수**로 세기 때문에 한글이 섞이면 표가 어긋난다.
+    """
+    return sum(2 if unicodedata.east_asian_width(c) in "WF" else 1 for c in text)
+
+
+def _pad(text: str, width: int, *, right: bool = False) -> str:
+    fill = " " * max(0, width - _width(text))
+    return fill + text if right else text + fill
+
+
+def table(factors: list[FactorScore]) -> list[str]:
+    """요인 표를 줄 목록으로. 열 너비는 내용에서 정한다 — 항목명 길이가 연령대마다
+    다르고(`앉아윗몸앞으로굽히기` 대 `상대악력`), 고정 폭으로는 어느 한쪽이 깨진다.
+    """
+    if not factors:
+        return []
+    headers = ("요인", "항목", "값", "점수", "또래 상위", "밴드")
+    right = (False, False, True, True, True, False)
+    rows = [
+        (
+            f.factor,
+            f.item_name,
+            f"{f.value:g}",
+            f"{f.score:.1f}",
+            f"{100 - f.percentile}%",
+            f.band,
+        )
+        for f in factors
+    ]
+    widths = [max(_width(h), *(_width(r[i]) for r in rows)) for i, h in enumerate(headers)]
+    gap = "  "
+
+    def line(cells: tuple[str, ...]) -> str:
+        joined = gap.join(_pad(c, w, right=r) for c, w, r in zip(cells, widths, right, strict=True))
+        return joined.rstrip()  # 마지막 열의 오른쪽 여백은 남기지 않는다
+
+    rule = "-" * (sum(widths) + len(gap) * (len(widths) - 1))
+    return [line(headers), rule, *(line(row) for row in rows)]
 
 
 def _measure(text: str) -> tuple[str, float]:
@@ -286,16 +338,14 @@ def main(argv: list[str] | None = None) -> int:
     lo, hi = result.band
     sex_ko = "여" if args.sex == "F" else "남"
     print(f"{result.age_group} · {sex_ko} · {args.age}{args.age_unit}   기준 구간 {lo}~{hi}")
-    print(f"\n  {'요인':<9}{'항목':<15}{'값':>8}{'점수':>8}{'또래 상위':>11}{'밴드':>11}")
-    print("  " + "-" * 60)
-    for f in result.factors:
-        print(
-            f"  {f.factor:<9}{f.item_name:<15}{f.value:>8}"
-            f"{f.score:>8}{100 - f.percentile:>10}%{f.band:>11}"
-        )
+    print()
+    for line in table(result.factors):
+        print("  " + line)
     print(f"\n  {result.grade_summary or '등급 판정 불가'}")
     if result.focus_one:
         print(f"  대상 요인 {result.focus_one}")
+    if result.body_composition:
+        print(f"  신체조성은 등급 판정에만 쓴다: {', '.join(sorted(result.body_composition))}")
     if result.not_scored:
         print(f"  이 구간의 기준항목이 아니다: {', '.join(result.not_scored)}")
     if result.low_sample:
