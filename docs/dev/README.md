@@ -94,15 +94,16 @@ AI-7 영상 라벨링 ─┘                                  │     │
 | ① | **`ai_documents` 에 연령 상한이 없다** | [AI-13](AI-13-backend-contract-reconciliation.md) §3.3 | AI-8 · **안전 규칙** | 없음 — 상한 없이는 `04` §3 을 못 지킨다 |
 | ② | **`ai_documents` 에 `chunk_id` 가 없다** | [AI-13](AI-13-backend-contract-reconciliation.md) §3.4 | AI-8 색인 시작 | `chunk_id text unique` 추가 요청 |
 | ③ | **미션 인용 컬럼 · 거부 저장** | [AI-13](AI-13-backend-contract-reconciliation.md) §3.1·§3.2 | AI-10 · AI-11 | 없음 — 인용률·거부율을 못 낸다 |
-| ④ | 신체조성 등급 문턱 | [AI-2](AI-2-grade-card.md) §5 | AI-2 등급 판정 | 3등급을 건강체력만으로 판정 |
 | ⑤ | 저표본(`n < 30`) 칸의 응답 | `02` §6 ③ | AI-4 응답 | `score`·`percentile` 을 `null` |
 | ⑥ | 궤적 밴드의 축 | `02` §6 ② | AI-5 산출물 | raw 밴드 |
 | ⑦ | `SIM_THRESHOLD` 값 | `04` §6 ② | AI-8 · `/readyz` | 없음 — 값이 없으면 기동하지 않는다 |
 
 ### 4.1 답이 나온 것
 
-**[AI-13](AI-13-backend-contract-reconciliation.md) §1 에서 셋이 해소됐다.**
-백엔드 문서에 적혀 있는 값이지 우리가 정한 것이 아니다.
+앞의 넷은 [AI-13](AI-13-backend-contract-reconciliation.md) §1 이 백엔드 문서에서
+확인한 값이지 우리가 정한 것이 아니다. 마지막 하나는 기준표 원본에서 읽었다.
+
+**해소된 항목은 §4 의 표에서 행만 지우고 번호는 비워 둔다** (`AGENTS.md` §4).
 
 | 옛 미결 | 답 |
 |---|---|
@@ -110,6 +111,7 @@ AI-7 영상 라벨링 ─┘                                  │     │
 | `missions` 실제 컬럼 (`03` §11 ①) | **[AI-13](AI-13-backend-contract-reconciliation.md) §3.1 — 우리 제안이 들어가지 않는다** |
 | AI가 pgvector에 직접 붙는가 (`01` §7 ① · `03` §11 ③) | **붙는다. `ai_documents` 하나로 제한된 역할** |
 | `profile_ref` 형식 (`03` §11 ②) | **`profiles.id` uuid** |
+| 신체조성 등급 문턱 (옛 §4 ④) | **기준표의 구간을 읽어 `body_composition_ranges.csv` 로 낸다** ([AI-2](AI-2-grade-card.md) §6) |
 
 `01`~`04` 본문은 아직 1024와 옛 전제로 쓰여 있다. **고치는 것은
 [AI-13](AI-13-backend-contract-reconciliation.md) §8 ① 의 합의 뒤다** — 계약

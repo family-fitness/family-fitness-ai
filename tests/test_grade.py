@@ -256,3 +256,25 @@ def test_개편_전_행도_분포에_넣는다() -> None:
 
     old = build_grade_distribution(frame(["1등급", "참가"], ym="202501"), [t("028", 1, 44.4)])
     assert old["n_cell"].unique().tolist() == [2]
+
+
+def test_항목군은_개별_요인과_섞어_적지_않는다() -> None:
+    """`운동체력`·`신체조성` 은 요인이 아니라 '중 한 가지' 조건이 묶인 항목군이다."""
+    body = [BodyRange("유소년", "F", 11, 11, "018", None, 23.3)]
+    blocked = judge(
+        CELL,
+        age_group="유소년",
+        age=11,
+        sex="F",
+        measurements={**HEALTHY, "012": 7.0, "022": 50, "043": 10, "018": 18.0},
+        body_ranges=body,
+    )
+    line = blocked.summary()
+    assert "요인 " in line
+    assert "요인 근력, 근지구력, 유연성, 운동체력" not in line  # 한 줄에 섞이지 않는다
+    assert line.rstrip().endswith("운동체력")
+
+
+def test_결측_문구도_같은_규칙을_따른다() -> None:
+    result = judge(CELL, age_group="유소년", age=11, sex="F", measurements={"028": 50.0})
+    assert "측정되지 않은 요인" in result.summary()

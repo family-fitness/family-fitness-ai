@@ -42,7 +42,7 @@ GRADE_NAMES = {1: "1등급", 2: "2등급", 3: "3등급"}
 PARTICIPATED = "참가"
 
 # 신체조성. 점수화하지 않지만 3등급 판정에는 쓴다 (docs/02 §5.2 vs §5.4).
-# 문턱이 구간 형태라 아직 문턱 표에 없다 (docs/dev/AI-2 §6).
+# 문턱이 아니라 구간이라 `body_composition_ranges.csv` 에 따로 있다 (docs/dev/AI-2 §6).
 BODY_COMPOSITION = frozenset({"003", "004", "018", "042"})
 
 
@@ -73,8 +73,8 @@ class GradeResult:
     def summary(self) -> str:
         """`steps[].summary` 에 실을 한 줄. 사람이 읽는 감사 기록이다 (docs/03 §5.4)."""
         if self.grade is None:
-            missing = sorted({f for c in self.checks for f in c.missing_factors})
-            return f"등급 판정 불가 · 측정되지 않은 요인 {', '.join(missing) or '없음'}"
+            missing = tuple(sorted({f for c in self.checks for f in c.missing_factors}))
+            return f"등급 판정 불가 · 측정되지 않은 {_phrase(missing) or '항목 없음'}"
 
         awarded = next((g for g, name in GRADE_NAMES.items() if name == self.grade), 99)  # 참가
         above = [c for c in self.checks if c.grade < awarded]
@@ -82,15 +82,32 @@ class GradeResult:
 
         blocked = next((c for c in above if c.verdict is Verdict.FAIL and c.failed_factors), None)
         if blocked is not None:
-            parts.append(
-                f"{GRADE_NAMES[blocked.grade]} 문턱에 걸린 요인 {', '.join(blocked.failed_factors)}"
+            blocked_at = GRADE_NAMES[blocked.grade]
+            parts.append(f"{blocked_at} 문턱에 걸린 {_phrase(blocked.failed_factors)}")
+        undecided = tuple(
+            sorted(
+                {f for c in above if c.verdict is Verdict.UNDECIDABLE for f in c.missing_factors}
             )
-        undecided = sorted(
-            {f for c in above if c.verdict is Verdict.UNDECIDABLE for f in c.missing_factors}
         )
         if undecided:
-            parts.append(f"상위 등급은 판정 불가 · 측정되지 않은 요인 {', '.join(undecided)}")
+            parts.append(f"상위 등급은 판정 불가 · 측정되지 않은 {_phrase(undecided)}")
         return " · ".join(parts)
+
+
+# `운동체력`·`신체조성` 은 요인이 아니라 항목군이다 ("중 한 가지" 조건이 묶여 있다).
+# 개별 요인과 한 줄에 나열하면 요인 이름처럼 읽힌다.
+GROUP_CONDITIONS = ("운동체력", "신체조성")
+
+
+def _phrase(names: tuple[str, ...]) -> str:
+    """걸린 것을 요인과 항목군으로 갈라 적는다."""
+    factors = [n for n in names if n not in GROUP_CONDITIONS]
+    groups = [n for n in names if n in GROUP_CONDITIONS]
+    parts = []
+    if factors:
+        parts.append(f"요인 {', '.join(factors)}")
+    parts += groups
+    return " · ".join(parts)
 
 
 def band_thresholds(
@@ -188,7 +205,7 @@ def _check_third(
             failed.append(factor)
     # 신체조성은 3등급에만 본다. 시트에서 1·2등급 행의 BMI·체지방률 칸은 비어 있다.
     # **중 한 가지**가 권장 범위면 통과다 — 운동체력과 같은 형태이고, 전부 요구하면
-    # 공단 기록보다 크게 박해진다 (docs/dev/AI-2 §5.4).
+    # 공단 기록보다 크게 박해진다 (docs/dev/AI-2 §5.1).
     measured_body = [r for r in body if r.item_code in measurements]
     if body and not measured_body:
         missing.append("신체조성")
