@@ -149,8 +149,10 @@ def load_body_ranges_xlsx(xlsx_path: str | Path) -> list[BodyRange]:
     out: list[BodyRange] = []
 
     for sheet in wb.worksheets:
+        # 열 매핑이 있는 시트만 읽는다. `SCORED_AGE_GROUPS` 를 쓰지 않는 것은 그 상수의
+        # 자리가 갈래마다 다르기 때문이다 — 여기서 필요한 것은 "읽을 열을 아는 시트"다.
         age_group = I.SHEET_TO_AGE_GROUP.get(sheet.title)
-        if age_group not in I.SCORED_AGE_GROUPS:
+        if age_group is None or age_group not in I.CRITERIA_COLUMNS:
             continue
         grid = [[c.value for c in row] for row in sheet.iter_rows()]
         for rng in sheet.merged_cells.ranges:
