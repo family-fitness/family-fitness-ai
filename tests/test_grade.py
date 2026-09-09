@@ -199,3 +199,44 @@ def test_문턱에_걸려_내려온_것과_재료가_없어_내려온_것을_가
     )
     assert "문턱에 걸린 항목" in 걸림.summary()
     assert "문턱에 걸린 항목" not in 없음.summary()
+
+
+def test_등급_미기재는_분모에서도_뺀다() -> None:
+    """미판정을 참가로 세면 참가 비율이 부풀어 오른다 (docs/dev/AI-2 §4)."""
+    import pandas as pd
+
+    from family_fitness_ai.ingest import measurements as M
+    from family_fitness_ai.stats.distribution import build_grade_distribution
+
+    df = pd.DataFrame(
+        {
+            M.AGE_GROUP_COL: ["유소년"] * 5,
+            M.AGE_COL: [11] * 5,
+            M.SEX_COL: ["F"] * 5,
+            M.GRADE_COL: ["1등급", "3등급", "참가", None, "미인증"],
+        }
+    )
+    out = build_grade_distribution(df, [t("028", 1, 44.4)])
+    assert out["n_cell"].unique().tolist() == [3]  # None 과 '미인증' 이 빠졌다
+    assert out.loc[out.grade == "참가", "ratio"].item() == pytest.approx(1 / 3, abs=5e-5)
+    assert out["count"].sum() == 3
+
+
+def test_등급_분포는_판정을_다시_돌리지_않는다() -> None:
+    """원자료의 등급 컬럼을 센다 — 측정값이 하나도 없어도 분포는 나온다."""
+    import pandas as pd
+
+    from family_fitness_ai.ingest import measurements as M
+    from family_fitness_ai.stats.distribution import build_grade_distribution
+
+    df = pd.DataFrame(
+        {
+            M.AGE_GROUP_COL: ["유소년", "유소년"],
+            M.AGE_COL: [11, 11],
+            M.SEX_COL: ["F", "F"],
+            M.GRADE_COL: ["1등급", "참가"],
+        }
+    )
+    out = build_grade_distribution(df, [t("028", 1, 44.4)])
+    assert set(out["grade"]) == {"1등급", "2등급", "3등급", "참가"}
+    assert out.loc[out.grade == "1등급", "ratio"].item() == pytest.approx(0.5)

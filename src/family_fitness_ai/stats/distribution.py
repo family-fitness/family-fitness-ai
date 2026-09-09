@@ -302,7 +302,15 @@ def main(argv: list[str] | None = None) -> int:
             f" · 판정된 {report['decided']:,}명의 일치율 {report['agree_ratio']:.1%}"
         )
         print(f"  불일치 — 우리가 후한 쪽 {report['generous']:,} · 박한 쪽 {report['strict']:,}")
-        print("  신체조성 문턱이 빠져 있어 후한 쪽으로 기운다 (docs/dev/AI-2 §5)")
+        # 기울기를 실측에서 읽는다. 어느 쪽으로 기우는지 미리 단정하지 않는다 —
+        # 신체조성 누락은 후한 쪽으로, 결측을 판정 불가로 보는 규칙은 박한 쪽으로
+        # 작용해서 방향이 상쇄된다 (docs/dev/AI-2 §5).
+        lean = (
+            "박한"
+            if report["strict"] > report["generous"]
+            else ("후한" if report["generous"] > report["strict"] else "양쪽 비슷한")
+        )
+        print(f"  {lean} 쪽으로 기운다 — 사유는 docs/dev/AI-2 §5")
     return 0
 
 
