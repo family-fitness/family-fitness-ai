@@ -21,6 +21,7 @@ import pandas as pd
 
 from ..ingest import measurements as M
 from . import criteria as C
+from . import grade as G
 from .items import ITEMS
 from .score import Anchors, build_anchors, score
 
@@ -163,6 +164,95 @@ def build(
     )
 
 
+GRADE_ORDER = ("1등급", "2등급", "3등급", G.PARTICIPATED)
+
+
+def build_grade_distribution(df: pd.DataFrame, thresholds: list[C.Threshold]) -> pd.DataFrame:
+    """또래 등급 분포. **판정을 다시 돌리지 않고 원자료의 등급 컬럼을 센다.**
+
+    공단이 기록한 등급이 원자료에 이미 있다. 우리 판정으로 분포를 만들면 판정
+    로직의 오차가 분포에 실리고, 사용자는 "내 등급"과 "또래 분포"를 같은 잣대로
+    읽지 못한다 (docs/dev/AI-2 §2).
+    """
+    rows: list[dict] = []
+    for age_group, group_df in df.groupby(M.AGE_GROUP_COL, sort=False):
+        for lo, hi in _bands(thresholds, str(age_group)):
+            band_df = group_df[(group_df[M.AGE_COL] >= lo) & (group_df[M.AGE_COL] <= hi)]
+            for sex in ("M", "F"):
+                cell = band_df[band_df[M.SEX_COL] == sex]
+                # 등급이 비어 있는 행은 분모에서도 뺀다. 미판정을 참가로 세면
+                # 참가 비율이 부풀어 오른다 (docs/dev/AI-2 §4).
+                graded = cell[cell[M.GRADE_COL].isin(GRADE_ORDER)]
+                total = int(len(graded))
+                if not total:
+                    continue
+                counts = graded[M.GRADE_COL].value_counts()
+                for name in GRADE_ORDER:
+                    count = int(counts.get(name, 0))
+                    rows.append(
+                        {
+                            "age_group": age_group,
+                            "age_lo": lo,
+                            "age_hi": hi,
+                            "age_unit": "개월" if age_group == "유아기" else "세",
+                            "sex": sex,
+                            "grade": name,
+                            "count": count,
+                            "ratio": round(count / total, 4),
+                            "n_cell": total,
+                        }
+                    )
+    return pd.DataFrame(rows)
+
+
+def concordance(df: pd.DataFrame, thresholds: list[C.Threshold], *, sample: int = 20000) -> dict:
+    """우리 판정과 공단 기록이 얼마나 같은가. **판정 로직의 검사다.**
+
+    전수를 돌리면 오래 걸리므로 표본을 본다. 파일로 만들지 않는다 — 매번 달라지는
+    진단값이고 커밋할 산출물이 아니다 (docs/dev/AI-2 §4).
+    """
+    graded = df[df[M.GRADE_COL].isin(GRADE_ORDER)]
+    if graded.empty:
+        return {"n": 0}
+    if len(graded) > sample:
+        graded = graded.sample(sample, random_state=0)
+
+    item_columns = {code: M._item_column(code) for code in ITEMS}
+    agree = disagree_generous = disagree_strict = undecidable = 0
+    for row in graded.itertuples(index=False):
+        values = {
+            code: float(getattr(row, col))
+            for code, col in item_columns.items()
+            if hasattr(row, col) and pd.notna(getattr(row, col))
+        }
+        ours = G.judge(
+            thresholds,
+            age_group=str(getattr(row, M.AGE_GROUP_COL)),
+            age=int(getattr(row, M.AGE_COL)),
+            sex=str(getattr(row, M.SEX_COL)),
+            measurements=values,
+        ).grade
+        theirs = str(getattr(row, M.GRADE_COL))
+        if ours is None:
+            undecidable += 1
+        elif ours == theirs:
+            agree += 1
+        elif GRADE_ORDER.index(ours) < GRADE_ORDER.index(theirs):
+            disagree_generous += 1  # 우리가 더 높은 등급을 줬다 = 후하다
+        else:
+            disagree_strict += 1
+    decided = agree + disagree_generous + disagree_strict
+    return {
+        "n": int(len(graded)),
+        "undecidable": undecidable,
+        "decided": decided,
+        "agree": agree,
+        "generous": disagree_generous,
+        "strict": disagree_strict,
+        "agree_ratio": round(agree / decided, 4) if decided else 0.0,
+    }
+
+
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description="연령 구간별 점수 분포를 CSV로 낸다")
     ap.add_argument("--data-dir", required=True, help="원자료 월별 CSV 디렉터리")
@@ -191,6 +281,8 @@ def main(argv: list[str] | None = None) -> int:
     dist.to_csv(out / "age_band_score_distribution.csv", index=False, encoding="utf-8-sig")
     quantiles.to_csv(out / "age_band_value_quantiles.csv", index=False, encoding="utf-8-sig")
     C.to_frame(thresholds).to_csv(out / "grade_thresholds.csv", index=False, encoding="utf-8-sig")
+    grades = build_grade_distribution(df, thresholds)
+    grades.to_csv(out / "age_band_grade_distribution.csv", index=False, encoding="utf-8-sig")
 
     # 출력을 파일로 넘기면 로케일 인코딩을 쓴다. 한국어 윈도우(cp949)에 없는
     # 문자(⚠, em dash)를 넣지 않는다.
@@ -201,6 +293,16 @@ def main(argv: list[str] | None = None) -> int:
     print(f"요약 {len(summary):,}행 → {out / 'age_band_score_summary.csv'}")
     print(f"분포 {len(dist):,}행 → {out / 'age_band_score_distribution.csv'}")
     print(f"분위수 {len(quantiles):,}행 → {out / 'age_band_value_quantiles.csv'}")
+    print(f"등급분포 {len(grades):,}행 → {out / 'age_band_grade_distribution.csv'}")
+
+    report = concordance(df, thresholds)
+    if report["n"]:
+        print(
+            f"\n[판정 대조] 표본 {report['n']:,}명 중 판정 불가 {report['undecidable']:,}"
+            f" · 판정된 {report['decided']:,}명의 일치율 {report['agree_ratio']:.1%}"
+        )
+        print(f"  불일치 — 우리가 후한 쪽 {report['generous']:,} · 박한 쪽 {report['strict']:,}")
+        print("  신체조성 문턱이 빠져 있어 후한 쪽으로 기운다 (docs/dev/AI-2 §5)")
     return 0
 
 

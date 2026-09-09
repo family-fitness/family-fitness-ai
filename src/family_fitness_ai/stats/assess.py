@@ -18,11 +18,14 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 
+from . import criteria as C
+from . import grade as G
 from .items import ITEMS
 from .score import Anchors, score
 
 DEFAULT_RELEASE = Path("data/release")
 BAND_STRENGTH, BAND_GROWTH = 75, 25
+CRITERIA_FILE = "grade_thresholds.csv"
 
 
 @dataclass(frozen=True)
@@ -57,6 +60,10 @@ class Reference:
         ]
         if missing:
             raise FileNotFoundError(f"산출물이 없다: {root} — {', '.join(missing)}")
+
+        # 문턱은 등급 판정이 쓴다 (docs/dev/AI-2 §1). 없으면 점수만 낸다.
+        criteria_path = root / CRITERIA_FILE
+        self.thresholds: list[C.Threshold] = C.load(criteria_path) if criteria_path.exists() else []
 
         summary = pd.read_csv(root / "age_band_score_summary.csv", encoding="utf-8-sig")
         summary = summary[summary["status"] == "ok"]
@@ -151,6 +158,8 @@ class Assessment:
     focus_one: str | None = None
     not_scored: list[str] = field(default_factory=list)
     note: str | None = None
+    grade: str | None = None
+    grade_summary: str | None = None
 
 
 def score_one(cell: Cell, value: float) -> FactorScore:
@@ -204,6 +213,18 @@ def assess(
             continue
         factors.append(score_one(cell, value))
     factors.sort(key=lambda f: -f.score)
+    # 등급은 점수와 따로 낸다 — 항목 AND 조건이라 요인 점수로 대신할 수 없다.
+    verdict = (
+        G.judge(
+            ref.thresholds,
+            age_group=age_group,
+            age=age,
+            sex=sex,
+            measurements=measurements,
+        )
+        if ref.thresholds
+        else G.GradeResult(grade=None)
+    )
     return Assessment(
         age_group=age_group,
         sex=sex,
@@ -213,6 +234,8 @@ def assess(
         factors=factors,
         focus_one=factors[-1].factor if factors else None,
         not_scored=skipped,
+        grade=verdict.grade,
+        grade_summary=verdict.summary(),
     )
 
 
@@ -263,8 +286,9 @@ def main(argv: list[str] | None = None) -> int:
             f"  {f.factor:<9}{f.item_name:<15}{f.value:>8}"
             f"{f.score:>8}{100 - f.percentile:>10}%{f.band:>11}"
         )
+    print(f"\n  {result.grade_summary or '등급 판정 불가'}")
     if result.focus_one:
-        print(f"\n  대상 요인 {result.focus_one}")
+        print(f"  대상 요인 {result.focus_one}")
     if result.not_scored:
         print(f"  이 구간의 기준항목이 아니다: {', '.join(result.not_scored)}")
     if result.low_sample:
