@@ -31,6 +31,9 @@ data/                    manifest.csv 와 release/ 만 커밋한다
 `docs/dev/<이슈ID>-<이름>.md` 가 따로 갖는다** —
 예: [`docs/dev/AI-1-age-band-distribution.md`](docs/dev/AI-1-age-band-distribution.md).
 
+**구현 순서와 지금 어디까지 왔는지는 [`docs/dev/README.md`](docs/dev/README.md) 다.**
+무엇이 무엇을 막고 있는지도 거기 모여 있다.
+
 백엔드와 프론트는 `03` 하나만 보면 된다 — 규칙과 필드가 같은 문서에 있고, 끝의
 체크리스트가 각자 지킬 것을 모아 둔다.
 

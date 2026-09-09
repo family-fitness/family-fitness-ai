@@ -15,6 +15,7 @@
 | 코치가 무엇을 근거로 답하나 | `docs/04-RAG-코퍼스-규약.md` |
 | 브랜치 · 커밋 · PR | `CONTRIBUTING.md` |
 | 기능 하나의 실행 방법·산출물·한계 | `docs/dev/<이슈ID>-<이름>.md` |
+| 구현 순서 · 무엇이 무엇을 막고 있나 | `docs/dev/README.md` |
 
 **코드 구역은 문서와 1:1이다.** `src/family_fitness_ai/` 각 패키지의 `__init__.py`에
 그 구역의 규약이 어느 절인지 적혀 있다.
