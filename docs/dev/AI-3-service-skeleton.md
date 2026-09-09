@@ -94,6 +94,17 @@ uvicorn family_fitness_ai.api.app:app --reload --port 8000
 curl localhost:8000/readyz
 ```
 
+산출물만 있고 인덱스와 임계값이 없는 지금 상태의 실제 응답이다 — **`503` 이 맞다.**
+
+```json
+{"ready": false,
+ "checks": {"release": true, "criteria": true, "sim_threshold": false, "vector": false},
+ "reasons": {"sim_threshold": "SIM_THRESHOLD 가 비어 있다",
+             "vector": "로컬 인덱스가 없다: data/index"}}
+```
+
+`/healthz` 는 같은 상태에서 `200` 이다. **둘이 갈리는 것이 이 갈래의 요점이다.**
+
 ---
 
 ## 4. 의존성
@@ -127,8 +138,25 @@ curl localhost:8000/readyz
 
 | # | 항목 | 상태 | 확정 전 기본값 |
 |---|---|---|---|
-| ① | `/readyz` 의 벡터 확인 방식 | **해소** — pgvector 직접 접속 (ADR-001) | `ai_documents` 에 대한 `SELECT 1`. 로컬은 FAISS 인덱스 파일 존재 |
+| ① | `/readyz` 의 pgvector 확인 | **미구현** — DB 드라이버를 §4 대로 넣지 않았다 | 지금은 항상 `false`. `ai_documents` 에 대한 `SELECT 1` 을 [AI-8](AI-8-vector-index.md) 이 채운다 |
 | ② | OpenAI 키 이름 | 미정 | `OPENAI_API_KEY` — 임베딩이 `text-embedding-3-small` 이다 ([AI-8](AI-8-vector-index.md) §1) |
 
 **DB 역할이 `ai_documents` 하나로 제한된다** (ADR-001). `/readyz` 가 다른 테이블을
 확인하려 들면 권한 오류로 준비되지 않은 것처럼 보인다 — 확인 대상을 그 하나로 둔다.
+
+---
+
+## 7. 코드
+
+| 모듈 | 하는 일 |
+|---|---|
+| `common/types.py` | 계약의 값 (`../03` §2.4). `stats`·`ingest` 가 가져다 쓴다 |
+| `common/errors.py` | 오류 코드와 봉투 |
+| `common/settings.py` | 환경변수 하나의 객체. 기동 시 한 번 |
+| `common/logging.py` | 요청 한 줄. 금지 필드를 막는다 |
+| `api/readiness.py` | 준비성 판단과 항목별 사유 |
+| `api/app.py` | 앱·미들웨어·예외 핸들러·`/healthz`·`/readyz` |
+
+검사는 `tests/test_api_skeleton.py` — `/healthz` 가 의존을 확인하지 않는지,
+`/readyz` 가 실패 사유를 항목별로 내는지, `SIM_THRESHOLD` 가 비면 준비되지 않는지,
+설정이 값 대신 설정 여부만 내놓는지, 금지 필드가 로그에 얹히지 않는지를 본다.

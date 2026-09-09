@@ -10,7 +10,8 @@ from pathlib import Path
 
 import pandas as pd
 
-from ..stats.items import ITEMS, SCORED_AGE_GROUPS
+from ..common.types import SCORED_AGE_GROUPS
+from ..stats.items import ITEMS
 
 AGE_GROUP_COL = "AGRDE_FLAG_NM"
 AGE_COL = "MESURE_AGE_CO"  # 유아기만 개월, 나머지는 만 나이 (docs/02 §2.4)
