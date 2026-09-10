@@ -1,7 +1,7 @@
 """FastAPI 앱 (docs/dev/AI-3).
 
-엔드포인트는 `/healthz` 와 `/readyz` 둘뿐이다. `/v1/*` 는 AI-4 부터 붙는다 —
-골격이라고 해서 "나중에 쓸 것"을 미리 넣지 않는다 (docs/03 §12).
+`/healthz`·`/readyz` 와 `/v1/fitness/assessment` 를 낸다. 나머지 `/v1` 은 그 갈래에서
+붙는다 — 골격이라고 해서 "나중에 쓸 것"을 미리 넣지 않는다 (docs/03 §12).
 
 실행:
     uvicorn family_fitness_ai.api.app:app --reload --port 8000
@@ -19,9 +19,10 @@ from fastapi.responses import JSONResponse
 from ..common import logging as reqlog
 from ..common.errors import ApiError, ErrorCode
 from ..common.settings import get_settings
-from . import readiness
+from . import fitness, readiness
 
 app = FastAPI(title="family-fitness-ai", version="0.1.0", docs_url="/docs")
+app.include_router(fitness.router)
 
 
 @app.middleware("http")
@@ -53,8 +54,20 @@ async def handle_validation_error(_: Request, exc: RequestValidationError) -> JS
     """필수 필드 누락·타입 불일치는 `400 BAD_REQUEST` 다 (docs/03 §2.2).
 
     **호출자 버그이므로 화면에 띄우지 않는다.** 메시지는 개발자용이다.
+
+    `exc.errors()` 를 그대로 넣지 않는다 — 항목마다 `input` 에 문제가 된 값이
+    실려 있어 신장·체중·측정값이 오류 응답으로 되돌아간다. 어디가 왜 틀렸는지만
+    남기면 호출자가 고치는 데 충분하다 (docs/01 §5).
     """
-    error = ApiError(ErrorCode.BAD_REQUEST, f"요청이 계약과 다르다: {exc.errors()}")
+    where = [
+        {
+            "loc": ".".join(str(part) for part in item["loc"]),
+            "type": item["type"],
+            "msg": item["msg"],
+        }
+        for item in exc.errors()
+    ]
+    error = ApiError(ErrorCode.BAD_REQUEST, f"요청이 계약과 다르다: {where}")
     reqlog.add_fields(error_code=error.code.value)
     return JSONResponse(status_code=error.status_code, content=error.body())
 

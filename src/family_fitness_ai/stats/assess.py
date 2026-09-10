@@ -19,6 +19,7 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 
+from ..common.types import Band, FitnessFactor
 from . import criteria as C
 from . import grade as G
 from .items import ITEMS
@@ -28,6 +29,7 @@ DEFAULT_RELEASE = Path("data/release")
 BAND_STRENGTH, BAND_GROWTH = 75, 25
 CRITERIA_FILE = "grade_thresholds.csv"
 BODY_RANGES_FILE = "body_composition_ranges.csv"
+GRADE_DIST_FILE = "age_band_grade_distribution.csv"
 
 
 @dataclass(frozen=True)
@@ -71,6 +73,18 @@ class Reference:
         self.body_ranges: list[C.BodyRange] = (
             C.load_body_ranges_csv(body_path) if body_path.exists() else []
         )
+
+        # 또래 등급 분포. `peer_distribution` 은 측정값이 없어도 나가므로 (docs/03 §3)
+        # 점수 산출물과 함께 올려 둔다.
+        dist_path = root / GRADE_DIST_FILE
+        self._peer: dict[tuple[str, int, str], list[tuple[str, float]]] = {}
+        if dist_path.exists():
+            peers = pd.read_csv(dist_path, encoding="utf-8-sig")
+            for key, group in peers.groupby(["age_group", "age_lo", "sex"]):
+                ag, lo, sx = key
+                self._peer[(str(ag), int(lo), str(sx))] = [
+                    (str(r.grade), float(r.ratio)) for r in group.itertuples()
+                ]
 
         summary = pd.read_csv(root / "age_band_score_summary.csv", encoding="utf-8-sig")
         summary = summary[summary["status"] == "ok"]
@@ -134,6 +148,11 @@ class Reference:
         band = self.band_of(age_group, age)
         return self._cells.get((age_group, band[0], sex, item_code)) if band else None
 
+    def peer_distribution(self, age_group: str, age: int, sex: str) -> list[tuple[str, float]]:
+        """그 칸의 등급 구성비. 없으면 빈 목록이다 — 없는 것을 지어내지 않는다."""
+        band = self.band_of(age_group, age)
+        return self._peer.get((age_group, band[0], sex), []) if band else []
+
     def items_of(self, age_group: str, age: int, sex: str) -> list[str]:
         band = self.band_of(age_group, age)
         if not band:
@@ -143,14 +162,14 @@ class Reference:
 
 @dataclass(frozen=True)
 class FactorScore:
-    factor: str
+    factor: FitnessFactor
     item_code: str
     item_name: str
     unit: str
     value: float
     score: float
     percentile: int
-    band: str
+    band: Band
     n: int
 
 
@@ -187,7 +206,7 @@ def score_one(cell: Cell, value: float) -> FactorScore:
     probe = value if not item.lower_is_better else -value
     below = float(np.searchsorted(ordered, probe, side="right")) / ordered.size * 100
     percentile = int(round(below))
-    band = (
+    band: Band = (
         "strength"
         if percentile >= BAND_STRENGTH
         else ("growth" if percentile < BAND_GROWTH else "steady")

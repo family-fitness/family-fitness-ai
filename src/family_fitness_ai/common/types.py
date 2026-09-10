@@ -43,3 +43,38 @@ MONTH_AGE_GROUP: AgeGroup = "유아기"
 
 def age_unit_of(age_group: AgeGroup) -> AgeUnit:
     return "개월" if age_group == MONTH_AGE_GROUP else "세"
+
+
+# 공식 연령 구간 (docs/02 §2.1).
+#
+# **유아기가 없는 것은 빠뜨린 것이 아니다.** 계약이 "유아기는 개월 수"로 받기로
+# 했고 (docs/03 §3.1), 기준표도 개월 구간으로 나뉜다 (docs/02 §2.4). 만 5세는
+# 60~71개월이라 두 구간에 걸쳐 세→개월 환산이 유일하지 않다. 그래서 `세` 로 온
+# 유아기 나이는 되돌리지 않고 `None` 을 내어 호출자가 400 을 받게 한다 —
+# 조회되지 않을 것을 연령대만 채워 200 으로 내보내는 것보다 정직하다.
+_YEAR_BANDS: tuple[tuple[int, int, AgeGroup], ...] = (
+    (11, 12, "유소년"),
+    (13, 18, "청소년"),
+    (19, 64, "성인"),
+    (65, 200, "어르신"),
+)
+_MONTH_BAND = (48, 83)
+
+
+def resolve_age_group(age: int, age_unit: AgeUnit) -> AgeGroup | None:
+    """계약이 응답에 실을 연령대 (docs/03 §3.2).
+
+    점수를 낼 수 있는지와는 다른 물음이다 — 어르신과 만 7~10세는 연령대가 정해지되
+    `factors` 가 빈 배열로 나간다 (docs/03 §2.4).
+
+    **`세` 로 온 만 4~6세는 `None` 이다** — 유아기는 개월로 받는다 (docs/03 §3.1).
+
+    **만 7~10세는 공식 구간에 없다.** 측정이 0건이라 그렇다 (docs/02 §2.2). 가장
+    가까운 `유소년` 으로 둔다 — 확정 전 기본값이다 (docs/02 §6 ④).
+    """
+    if age_unit == "개월":
+        return "유아기" if _MONTH_BAND[0] <= age <= _MONTH_BAND[1] else None
+    for lo, hi, group in _YEAR_BANDS:
+        if lo <= age <= hi:
+            return group
+    return "유소년" if 7 <= age <= 10 else None

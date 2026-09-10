@@ -14,7 +14,7 @@
 | `ai-service` | `uvicorn ... api.app:app` | 상시 2개 (AZ 분산) |
 | `ai-batch` | `python -m family_fitness_ai.<batch>` | 0개 · 이벤트 기동 |
 
-`data/release/` 산출물을 이미지에 넣는다. 617KB이고, 넣으면 `/readyz` 의 산출물
+`data/release/` 산출물을 이미지에 넣는다. 628KB이고, 넣으면 `/readyz` 의 산출물
 확인이 배포 시점에 끝난다.
 
 ---

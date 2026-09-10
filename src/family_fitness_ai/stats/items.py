@@ -8,6 +8,8 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
+from ..common.types import FitnessFactor
+
 # 기준표 시트 이름 ↔ 자료의 연령대 값. 시트는 '노년기', 자료는 '어르신'이다.
 SHEET_TO_AGE_GROUP = {
     "유아기": "유아기",
@@ -23,7 +25,7 @@ class Item:
     code: str
     name: str
     unit: str
-    factor: str
+    factor: FitnessFactor  # 계약의 값이다 (docs/03 §2.4) — 오타를 검사가 잡는다
     lower_is_better: bool = False
 
 
@@ -94,6 +96,19 @@ CRITERIA_COLUMNS: dict[str, dict[str, tuple[str, ...]]] = {
         "체공시간(초)": ("041",),
     },
 }
+
+
+def item_label(age_group: str, code: str) -> str:
+    """그 연령대의 실제 시험명 (docs/03 §3.5).
+
+    같은 코드 `020` 이 유소년은 15m, 청소년·성인은 20m 왕복 오래달리기다. 기준표
+    열 머리글이 이미 그 이름이라 **두 번째 표를 만들지 않는다** — 단위 괄호만 뗀다.
+    머리글이 없으면 데이터 항목명으로 떨어진다.
+    """
+    for header, codes in CRITERIA_COLUMNS.get(age_group, {}).items():
+        if code in codes:
+            return header.split("(")[0]
+    return ITEMS[code].name if code in ITEMS else code
 
 
 def normalise_header(text: object) -> str:
