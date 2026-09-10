@@ -55,14 +55,18 @@ def assessment(request: AssessmentRequest) -> AssessmentResponse:
         measurements=request.measurements,
     )
     factors = [_factor(age_group, f) for f in result.factors]
+    # 저표본 강등과 L2 판정은 다른 물음이다. `scored` 는 문구·대상 요인을 고를 때만
+    # 쓴다 — 그것으로 L2 를 판정하면 저표본 칸만 잰 사람의 측정값이 응답에서
+    # 통째로 사라진다 (docs/03 §3.5 는 점수만 내리라고 했지 행을 지우라 하지 않았다).
     scored = [f for f in factors if f.score is not None]
-    level = _input_level(request, scored)
+    level = _input_level(request, factors)
 
     reqlog.add_fields(
         profile_ref=request.profile_ref,
         input_level=level,
         age_group=age_group,
-        factor_count=len(scored),
+        factor_count=len(factors),
+        low_sample=result.low_sample,
         graded=result.grade is not None,
     )
     return AssessmentResponse(
@@ -82,12 +86,16 @@ def assessment(request: AssessmentRequest) -> AssessmentResponse:
     )
 
 
-def _input_level(request: AssessmentRequest, scored: list[FactorScore]) -> InputLevel:
+def _input_level(request: AssessmentRequest, factors: list[FactorScore]) -> InputLevel:
     """**`measurements` 가 왔다고 `L2` 가 아니다** (docs/dev/AI-4 §2).
 
-    그 연령 구간의 기준항목이 아니면 점수가 안 나온다. 하나도 안 나오면 `L1` 이다.
+    그 연령 구간의 기준항목이 아니면 점수가 안 나온다. 하나도 안 나오면 위 표로
+    되돌아간다 — 신장·체중이 있으면 `L1`, 없으면 `L0` 이다.
+
+    **저표본으로 점수를 내린 행은 여기서 세어 준다.** 그 칸의 기준항목으로 채점은
+    됐고 표시만 보류한 것이라, 빼면 측정값이 응답에서 사라진다.
     """
-    if scored:
+    if factors:
         return "L2"
     return "L1" if request.height_cm is not None and request.weight_kg is not None else "L0"
 
@@ -127,15 +135,16 @@ def _child(age_group: AgeGroup, scored: list[FactorScore]) -> ChildScope:
 def _parent_copy(scored: list[FactorScore]) -> ParentCopy:
     """`strength` 는 잘하고 있는 요인 중 최고, `focus` 는 최저 (docs/dev/AI-4 §3.3)."""
     if not scored:
-        return ParentCopy(
-            strength="측정값을 넣으면 요인별로 살펴볼 수 있습니다",
-            focus="측정값을 넣으면 이번에 키우기 좋은 영역을 알려드립니다",
-        )
+        return ParentCopy(**C.NO_MEASUREMENT_PARENT)
+
     ranked = sorted(scored, key=lambda f: f.score or 0.0)
     lowest = ranked[0]
     strong = [f for f in ranked if f.band == "strength"]
     top = strong[-1] if strong else ranked[-1]
-    return ParentCopy(
-        strength=C.parent_line(top.factor, top.band or "steady"),
-        focus=C.parent_line(lowest.factor, lowest.band or "steady"),
-    )
+    focus = C.parent_line(lowest.factor, lowest.band or "steady")
+
+    # 둘이 같은 요인이면 같은 문장이 두 번 나간다. 하나만 재고 두 가지를 말할 수
+    # 없으므로 그 사실을 적는다 (docs/dev/AI-4 §3.3).
+    if top.factor == lowest.factor:
+        return ParentCopy(strength=C.SINGLE_FACTOR_STRENGTH, focus=focus)
+    return ParentCopy(strength=C.parent_line(top.factor, top.band or "steady"), focus=focus)

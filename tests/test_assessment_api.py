@@ -101,6 +101,42 @@ def test_실측_예시가_그대로_나온다(client: TestClient) -> None:
     assert factors["유연성"]["score"] == 45.3
     assert factors["심폐지구력"]["score"] == 85.9
     assert factors["순발력"]["score"] == 41.2
+    # 점수만 보면 백분위·밴드·단위가 어긋나도 통과한다. 한 행을 통째로 못박는다.
+    assert factors["심폐지구력"] == {
+        "factor": "심폐지구력",
+        "item_code": "020",
+        "item_name": "왕복오래달리기",
+        "item_label": "15m왕복오래달리기",
+        "unit": "회",
+        "value": 70.0,
+        "score": 85.9,
+        "percentile": 80,
+        "band": "strength",
+        "n": 28215,
+    }
+    # 점수 내림차순이다 — 대상 요인(최저)과 strength(최고) 선택이 이 정렬에 기댄다
+    scores = [f["score"] for f in body["parent_scope"]["factors"]]
+    assert scores == sorted(scores, reverse=True)
+
+
+def test_부모_문구가_최고와_최저_요인을_고른다(client: TestClient) -> None:
+    """이 엔드포인트가 새로 하는 두 일 중 하나다 (docs/dev/AI-4 §3.3)."""
+    copy = post(client, measurements=MEASURED)["parent_scope"]["copy"]
+    assert copy["strength"] == "심폐지구력은 잘하고 있는 영역입니다"
+    assert copy["focus"] == "순발력은 꾸준히 하고 있는 영역입니다"
+
+
+def test_요인이_하나면_같은_문장을_두_번_내지_않는다(client: TestClient) -> None:
+    """하나만 재고 두 가지를 말할 수는 없다 (docs/dev/AI-4 §3.3)."""
+    copy = post(client, measurements={"028": 41.3})["parent_scope"]["copy"]
+    assert copy["strength"] != copy["focus"]
+    assert "근력" in copy["focus"]
+
+
+def test_측정값이_없으면_문구도_그렇게_말한다(client: TestClient) -> None:
+    copy = post(client)["parent_scope"]["copy"]
+    assert copy["strength"] != copy["focus"]
+    assert all("넣으면" in line for line in copy.values())
 
 
 def test_item_label_은_연령대의_실제_시험명이다(client: TestClient) -> None:
@@ -145,17 +181,31 @@ def test_어르신도_200_이다(client: TestClient) -> None:
 
 
 def test_유아기는_개월로_조회된다(client: TestClient) -> None:
-    """세로 환산은 내림이다 — 반올림하면 공백을 거짓으로 메운다 (docs/02 §2.4)."""
-    body = post(client, age=60, age_unit="개월")
+    """개월 키로 산출물 칸에 실제로 닿는지 본다 — 연령대 문자열만 보면 조회가
+    비어도 통과한다."""
+    body = post(client, age=60, age_unit="개월", measurements={"020": 20, "028": 30})
     assert body["age_group"] == "유아기"
+    assert body["input_level"] == "L2"
+    assert len(body["parent_scope"]["factors"]) == 2
+    assert body["parent_scope"]["peer_distribution"] != []
+
+
+def test_유아기를_세로_보내면_400_이다(client: TestClient) -> None:
+    """계약이 개월로 받기로 했다 (docs/03 §3.1). 만 5세는 60~71개월이라 세→개월
+    환산이 유일하지 않다 — 조회되지 않을 것을 200 으로 내보내지 않는다."""
+    response = client.post(PATH, json={**BASE, "age": 5})
+    assert response.status_code == 400
+    assert response.json()["error"]["code"] == "BAD_REQUEST"
 
 
 # ── 오류 ────────────────────────────────────────────────────────────
 
 
-def test_혈압을_보내면_400_이다(client: TestClient) -> None:
-    """AI는 이 항목을 다루지 않는다 (docs/03 §9)."""
-    response = client.post(PATH, json={**BASE, "measurements": {"005": 80, "028": 41.3}})
+@pytest.mark.parametrize("code", ["005", "006"])
+def test_혈압을_보내면_400_이다(client: TestClient, code: str) -> None:
+    """AI는 이 항목을 다루지 않는다 (docs/03 §9). 둘 다 리터럴로 적는다 — 상수를
+    돌리면 상수에서 빠진 코드를 검사도 함께 놓친다."""
+    response = client.post(PATH, json={**BASE, "measurements": {code: 80, "028": 41.3}})
     assert response.status_code == 400
     assert response.json()["error"]["code"] == "ITEM_NOT_ALLOWED"
 
@@ -172,9 +222,23 @@ def test_연령대를_정할_수_없으면_400_이다(client: TestClient) -> Non
     assert response.json()["error"]["code"] == "BAD_REQUEST"
 
 
-def test_신장_범위를_벗어나면_400_이다(client: TestClient) -> None:
-    response = client.post(PATH, json={**BASE, "height_cm": 300.0})
+@pytest.mark.parametrize(
+    ("field", "value"),
+    [("height_cm", 300.0), ("height_cm", 10.0), ("weight_kg", 300.0), ("weight_kg", 1.0)],
+)
+def test_신장_체중_범위를_벗어나면_400_이다(client: TestClient, field: str, value: float) -> None:
+    """docs/03 §3.1 — 신장 30~230, 체중 5~250."""
+    response = client.post(PATH, json={**BASE, field: value})
     assert response.status_code == 400
+    assert response.json()["error"]["code"] == "BAD_REQUEST"
+
+
+def test_오류_응답이_보낸_값을_되돌려_보내지_않는다(client: TestClient) -> None:
+    """검증 오류에 신장·체중·측정값이 실려 나가지 않는다 (docs/01 §5)."""
+    response = client.post(PATH, json={**BASE, "height_cm": 300.0})
+    message = response.json()["error"]["message"]
+    assert "300" not in message
+    assert "height_cm" in message  # 어디가 틀렸는지는 남는다
 
 
 def test_저표본_칸은_점수를_null_로_내린다(client: TestClient) -> None:
@@ -193,3 +257,19 @@ def test_저표본_칸은_점수를_null_로_내린다(client: TestClient) -> No
     assert 저표본["band"] is None
     assert 저표본["value"] == 40.0  # 측정값 자체는 남는다
     assert factors["근력"]["score"] is not None
+
+
+def test_저표본_칸만_재도_행과_측정값이_남는다(client: TestClient) -> None:
+    """저표본 강등과 L2 판정은 다른 물음이다.
+
+    docs/03 §3.5 는 `n < 30` 이면 점수를 내리라고 했지 행을 지우라 하지 않았다 —
+    `value` 와 `n` 은 필수 필드다. 지우면 부모가 넣은 측정값이 응답에서 사라지고,
+    `low_sample: true` 인데 그 표본이 어느 칸 것인지 알 수 없는 응답이 나간다.
+    """
+    body = post(client, age=14, measurements={"035": 40.0})  # 청소년 여 14세 n=22
+    assert body["input_level"] == "L2"
+    row = body["parent_scope"]["factors"][0]
+    assert row["value"] == 40.0
+    assert row["n"] < 30
+    assert row["score"] is None
+    assert body["low_sample"] is True

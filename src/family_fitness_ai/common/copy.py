@@ -47,6 +47,17 @@ AGE_GROUP_FOCUS: dict[AgeGroup, FitnessFactor] = {
 }
 
 
+# 측정값이 없을 때(`L0`·`L1`)의 부모 화면 두 줄.
+NO_MEASUREMENT_PARENT: dict[str, str] = {
+    "strength": "측정값을 넣으면 요인별로 살펴볼 수 있습니다",
+    "focus": "측정값을 넣으면 이번에 키우기 좋은 영역을 알려드립니다",
+}
+
+# 점수가 난 요인이 하나뿐이라 `strength` 와 `focus` 가 같은 요인을 가리킬 때.
+# 하나만 재고 두 가지를 말할 수는 없다 (docs/dev/AI-4 §3.3).
+SINGLE_FACTOR_STRENGTH = "측정된 요인이 하나여서 견줄 영역이 아직 없습니다"
+
+
 def child_focus(factor: FitnessFactor) -> str:
     return CHILD_FOCUS[factor]
 

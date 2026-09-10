@@ -12,9 +12,10 @@
 | 구역 | 상태 |
 |---|---|
 | `docs/01`~`04` | 확정. **일부가 백엔드 스키마와 어긋난다** — [AI-13](AI-13-backend-contract-reconciliation.md) |
-| `stats/` · `ingest/` | **동작한다.** 원자료 → 점수 눈금 → 산출물 4종 → 채점 CLI |
-| `api/` · `graph/` · `rag/` · `labeling/` · `common/` | `__init__.py` 만 있다 |
-| 의존성 | `numpy` · `pandas` · `openpyxl` 셋뿐. FastAPI도 LangGraph도 아직 없다 |
+| `stats/` · `ingest/` | **동작한다.** 원자료 → 점수 눈금 → 산출물 6종 → 채점 CLI |
+| `api/` · `common/` | **동작한다.** 설정·오류·로그·`/healthz`·`/readyz`·`/v1/fitness/assessment` |
+| `graph/` · `rag/` · `labeling/` | `__init__.py` 만 있다 |
+| 의존성 | 위에 `fastapi` · `uvicorn` · `pydantic-settings`. LangGraph는 아직 없다 |
 | CI | `ruff` · `mypy` · `pytest` 가 `main`·`develop`·PR 에서 돈다 |
 
 계약(`03`)에 정의된 엔드포인트 넷 중 구현된 것은 0개다.
@@ -52,9 +53,9 @@ AI-7 영상 라벨링 ─┘                                  │     │
 |---|---|---|---|
 | [AI-13](AI-13-backend-contract-reconciliation.md) ★ | 백엔드 스키마 대조와 계약 조정 | — | **합의 대기 (§4)** |
 | [AI-1](AI-1-age-band-distribution.md) ✅ | 연령 구간별 점수 분포 | — | — |
-| [AI-2](AI-2-grade-card.md) | 등급 판정과 또래 등급 분포 | AI-1 | 신체조성 문턱 (§4 ④) |
-| [AI-3](AI-3-service-skeleton.md) | FastAPI 골격·설정·오류·로그 | — | — |
-| [AI-4](AI-4-assessment-endpoint.md) | `POST /fitness/assessment` | AI-2·3 | 저표본 처리 (`02` §6 ③) |
+| [AI-2](AI-2-grade-card.md) ✅ | 등급 판정과 또래 등급 분포 | AI-1 | — |
+| [AI-3](AI-3-service-skeleton.md) ✅ | FastAPI 골격·설정·오류·로그 | — | — |
+| [AI-4](AI-4-assessment-endpoint.md) 🔵 | `POST /fitness/assessment` | AI-2·3 | — (저표본은 `02` §6 ③ 기본값대로) |
 | [AI-5](AI-5-trajectory-bands.md) | `POST /fitness/trajectory` | AI-3 | 밴드 축 (`02` §6 ②) |
 | [AI-6](AI-6-prescription-corpus.md) | 처방 어휘·청크 추출 | AI-1 | 일련 규칙 (`04` §6 ④) |
 | [AI-7](AI-7-video-labeling.md) | 영상 수집과 라벨링 | — | 영상 라벨 스키마 (§4 ②) |
