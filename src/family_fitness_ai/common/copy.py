@@ -9,7 +9,7 @@
 
 from __future__ import annotations
 
-from .types import AgeGroup, Band, FitnessFactor
+from .types import Band, FitnessFactor
 
 # docs/03 §2.6 — "부족"·"미달"·"하위"를 쓰지 않는다. 순위가 아니라 활동으로 말한다.
 FORBIDDEN_WORDS = ("부족", "미달", "하위", "열등", "낙제", "미흡")
@@ -32,20 +32,6 @@ CHILD_FOCUS: dict[FitnessFactor, str] = {
     "협응력": "이번 주는 손과 눈을 함께 쓰는 놀이를 해볼까요",
     "평형성": "이번 주는 한 발로 서서 균형을 잡아볼까요",
 }
-
-# 측정값이 없을 때(`L0`·`L1`)의 연령대 고정 제안.
-#
-# **점수가 없으므로 요인을 고르는 근거도 없다** (docs/dev/AI-4 §3.1). 이 표는
-# 근거가 아니라 자리를 채우는 값이고, 코퍼스가 서면 안전지침 청크가 근거가 된다
-# (docs/dev/AI-4 §6 ②). 바꿀 때 코드를 뒤질 필요가 없도록 여기 모아 둔다.
-AGE_GROUP_FOCUS: dict[AgeGroup, FitnessFactor] = {
-    "유아기": "협응력",
-    "유소년": "순발력",
-    "청소년": "심폐지구력",
-    "성인": "심폐지구력",
-    "어르신": "평형성",
-}
-
 
 # 측정값이 없을 때(`L0`·`L1`)의 부모 화면 두 줄.
 NO_MEASUREMENT_PARENT: dict[str, str] = {

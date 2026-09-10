@@ -42,6 +42,17 @@ def test_child_scope_에_점수와_백분위와_체중이_없다(client: TestCli
     assert set(child["focus_one"]) == {"factor", "copy"}
 
 
+def test_측정값이_없으면_요인을_지목하지_않는다(client: TestClient) -> None:
+    """연령만으로 요인을 고르면 그 값에는 인용할 것이 없다 (docs/dev/AI-4 §3.1).
+
+    빈 자리를 문구로 채우지 않는다 — `focus_one: null` 이면 호출자는 제안이 없음을
+    안다. 제안은 코퍼스가 선 뒤(AI-8) 근거와 함께 붙는다.
+    """
+    for kwargs in ({}, {"height_cm": 148.0, "weight_kg": 41.0}):
+        child = post(client, **kwargs)["child_scope"]
+        assert child == {"focus_one": None}
+
+
 def test_요인_하나만_제안한다(client: TestClient) -> None:
     """요인 간 비교·순위를 담지 않는다 (docs/03 §3.3)."""
     child = post(client, measurements=MEASURED)["child_scope"]
@@ -68,7 +79,8 @@ def test_측정값이_없어도_200_이고_factors_는_빈_배열이다(client: 
     assert body["input_level"] == "L0"
     assert body["parent_scope"]["factors"] == []
     assert body["parent_scope"]["grade"] is None
-    assert body["child_scope"]["focus_one"] is not None  # 연령대 고정 제안
+    # 점수가 없으면 요인을 지목하지 않는다 — 권할 근거가 없다
+    assert body["child_scope"]["focus_one"] is None
 
 
 def test_신장_체중만_있으면_L1_이다(client: TestClient) -> None:
