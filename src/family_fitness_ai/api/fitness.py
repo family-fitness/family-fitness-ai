@@ -72,7 +72,7 @@ def assessment(request: AssessmentRequest) -> AssessmentResponse:
     return AssessmentResponse(
         input_level=level,
         age_group=age_group,
-        child_scope=_child(age_group, scored),
+        child_scope=_child(scored),
         parent_scope=ParentScope(
             grade=result.grade if level == "L2" else None,
             peer_distribution=[
@@ -121,14 +121,16 @@ def _factor(age_group: AgeGroup, f: A.FactorScore) -> FactorScore:
     )
 
 
-def _child(age_group: AgeGroup, scored: list[FactorScore]) -> ChildScope:
-    """요인 **하나**뿐이다. 요인 간 비교·순위를 담지 않는다 (docs/03 §3.3)."""
-    if scored:
-        focus = min(scored, key=lambda f: f.score if f.score is not None else 101.0).factor
-    else:
-        # 점수가 없으므로 요인을 고르는 근거도 없다 — 연령대 고정 제안이다
-        # (docs/dev/AI-4 §3.1 · §6 ②).
-        focus = C.AGE_GROUP_FOCUS[age_group]
+def _child(scored: list[FactorScore]) -> ChildScope:
+    """요인 **하나**뿐이다. 요인 간 비교·순위를 담지 않는다 (docs/03 §3.3).
+
+    **점수가 없으면 요인을 지목하지 않는다.** 어느 요인을 권할 근거가 없기 때문이다.
+    그때는 `focus_one` 이 `null` 이고, 빈 화면에 무엇을 쓸지는 호출자가 정한다 —
+    요인도 점수도 없는 문구라 AI가 소유할 이유가 없다 (docs/dev/AI-4 §3.1).
+    """
+    if not scored:
+        return ChildScope(focus_one=None)
+    focus = min(scored, key=lambda f: f.score if f.score is not None else 101.0).factor
     return ChildScope(focus_one=FocusOne(factor=focus, text=C.child_focus(focus)))
 
 
