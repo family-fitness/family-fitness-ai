@@ -128,5 +128,14 @@ def test_설정은_값이_아니라_설정_여부만_내놓는다() -> None:
 
 
 def test_벡터_백엔드_기본값은_faiss_다() -> None:
-    """DB가 서기 전에도 개발이 멈추지 않게 한다 (docs/01 §1)."""
-    assert Settings().vector_backend == "faiss"
+    """DB가 서기 전에도 개발이 멈추지 않게 한다 (docs/01 §1). 로컬 `.env` 는 읽지 않는다."""
+    assert Settings(_env_file=None).vector_backend == "faiss"
+
+
+def test_빈_환경변수는_설정하지_않은_것이다(monkeypatch: pytest.MonkeyPatch) -> None:
+    """`.env.example` 을 복사하면 `SIM_THRESHOLD=` 같은 빈 줄이 남는다. 기동이 막히면 안 된다."""
+    monkeypatch.setenv("SIM_THRESHOLD", "")
+    monkeypatch.setenv("VECTOR_BACKEND", "")
+    settings = Settings(_env_file=None)
+    assert settings.sim_threshold is None
+    assert settings.vector_backend == "faiss"

@@ -71,3 +71,35 @@ def load_dir(data_dir: str | Path) -> pd.DataFrame:
         if col in out.columns:
             out[col] = pd.to_numeric(out[col], errors="coerce")
     return out.reset_index(drop=True)
+
+
+PRESCRIPTION_COL = "MVM_PRSCRPTN_CN"
+
+# 만 120세 초과는 측정 오류다. 어르신 나이에 377·984·1081 같은 값이 있고, 실제
+# 최고령 103세와 그 사이가 통째로 비어 있어 경계를 어디에 두어도 결과가 같다
+# (docs/dev/AI-6 §6.2).
+MAX_PLAUSIBLE_AGE = 120
+
+
+def load_prescriptions(data_dir: str | Path) -> pd.DataFrame:
+    """처방문과 그 칸을 읽는다. **어르신도 남긴다.**
+
+    `load_dir` 는 점수 대상 연령대만 남기지만, 처방 코퍼스는 어르신도 쓴다 —
+    어르신은 점수·등급을 내지 않을 뿐 질의응답은 정상 동작한다 (docs/02 §6 ⑦).
+    """
+    root = Path(data_dir).expanduser()
+    paths = sorted(root.glob("*.csv"))
+    if not paths:
+        raise FileNotFoundError(_no_csv_message(root))
+
+    cols = [AGE_GROUP_COL, AGE_COL, SEX_COL, PRESCRIPTION_COL]
+    out = pd.concat(
+        [pd.read_csv(p, encoding="utf-8-sig", low_memory=False, usecols=cols) for p in paths],
+        ignore_index=True,
+    )
+    out = out[out[PRESCRIPTION_COL].notna() & out[SEX_COL].isin(["M", "F"])]
+    out[AGE_COL] = pd.to_numeric(out[AGE_COL], errors="coerce")
+    # 유아기는 개월(48~83)이라 120 을 넘지 않는다. 경계는 어르신 오류값에만 걸린다.
+    out = out[out[AGE_COL].notna() & (out[AGE_COL] <= MAX_PLAUSIBLE_AGE)]
+    out[AGE_COL] = out[AGE_COL].astype(int)
+    return out.reset_index(drop=True)

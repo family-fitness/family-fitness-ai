@@ -286,7 +286,7 @@ BE는 `predictions` · `prediction_points` · `years_from_now` · `scenario`
 
 | | 우리 (`../03` §5) | BE |
 |---|---|---|
-| 단위 | 프로필 (`409` 도 프로필 기준) | **가족·주차** (`uq_coach_run (family_id, week_start)`) |
+| 단위 | 프로필 (`409` 도 프로필 기준) | **가족·주차** (코드 검사. DB 유니크 제약은 없고 `ix_coach_runs_family_week` 인덱스뿐이다) |
 | 트리거 | 사용자가 "이번 주 미션 받기" | **일요일 20시 CRON** + MANUAL |
 
 **BE 쪽이 맞다.** 편성 입력이 `profile_refs[]` 1~4명이니 실제 단위는 가족이다.

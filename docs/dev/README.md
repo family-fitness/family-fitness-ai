@@ -14,7 +14,8 @@
 | `docs/01`~`04` | 확정. 백엔드 실물과 대조해 갱신했다 — [AI-13](AI-13-backend-contract-reconciliation.md) |
 | `stats/` · `ingest/` | **동작한다.** 원자료 → 점수 눈금 → 산출물 6종 → 채점 CLI |
 | `api/` · `common/` | **동작한다.** 설정·오류·로그·`/healthz`·`/readyz`·`/v1/fitness/assessment` |
-| `graph/` · `rag/` · `labeling/` | `__init__.py` 만 있다 — **여기가 남은 일이다** |
+| `rag/` | 처방 어휘·청크 산출 ([AI-6](AI-6-prescription-corpus.md)) |
+| `graph/` · `labeling/` | `__init__.py` 만 있다 — **여기가 남은 일이다** |
 | CI | `ruff` · `mypy` · `pytest` |
 
 **백엔드는 우리 다섯 경로를 부를 준비가 끝났다.** `AiGateway` 가 타임아웃·재시도까지
@@ -40,12 +41,10 @@
 AI-1 분포 ✅ ─ AI-2 등급 ✅ ─┐
                              ├─ AI-4 assessment ✅ (호출부 없음 · 보류)
 AI-3 서비스 골격 ✅ ─────────┘
-                    │
-AI-6 처방 코퍼스 ───┤
-                    ├─ AI-8 임베딩·색인·검색 ─┬─ AI-10 coach/messages
-AI-7 영상 라벨링 ───┘                          └─ AI-11 coach/runs
-                                                      │
-                                                AI-12 배포·관측
+
+AI-6 처방 코퍼스 ✅ ─┬─ AI-11 coach/runs (비슷한 측정 기록 매칭) ─┐
+AI-7 영상 라벨링 ────┤                                            ├─ AI-12 배포·관측
+                     └─ AI-8 색인·검색 ─ AI-10 coach/messages ────┘
 ```
 
 | 이슈 | 무엇 | 선행 | 상태 |
@@ -55,10 +54,10 @@ AI-7 영상 라벨링 ───┘                          └─ AI-11 coach/r
 | [AI-2](AI-2-grade-card.md) | 등급 판정과 또래 등급 분포 | AI-1 | ✅ |
 | [AI-3](AI-3-service-skeleton.md) | FastAPI 골격 | — | ✅ |
 | [AI-4](AI-4-assessment-endpoint.md) | `POST /fitness/assessment` | AI-2·3 | ✅ **보류** — 호출부 없음 |
-| **[AI-6](AI-6-prescription-corpus.md)** | 처방 어휘·청크 | AI-1 | **다음** |
-| **[AI-8](AI-8-vector-index.md)** | 임베딩·색인·검색 | AI-6 | 막는 것 없음 |
+| **[AI-6](AI-6-prescription-corpus.md)** | 처방 어휘·청크 | AI-1 | ✅ |
+| **[AI-8](AI-8-vector-index.md)** | 임베딩·색인·검색 | AI-6 | `coach/messages` 용. `coach/runs` 에는 필요 없다 |
 | **[AI-10](AI-10-coach-messages.md)** | `POST /coach/messages` | AI-8 | 호출부 있음 |
-| **[AI-11](AI-11-coach-runs.md)** | 미션 편성 그래프 | AI-4·10 | 호출부·저장 자리 있음 |
+| **[AI-11](AI-11-coach-runs.md)** | 미션 편성 — 비슷한 측정 기록 매칭 | AI-6 (영상은 AI-7) | **다음** · 호출부 있음 |
 | [AI-7](AI-7-video-labeling.md) | 영상 수집·라벨링 | — | 검색 품질용 |
 | [AI-5](AI-5-trajectory-bands.md) | `POST /fitness/trajectory` | AI-3 | 호출부 있으나 스텁으로 화면이 돈다 |
 | [AI-9](AI-9-videos-search.md) | `POST /videos/search` | AI-8 | 백엔드 자체 조회로 충분 |
@@ -74,17 +73,15 @@ AI-7 영상 라벨링 ───┘                          └─ AI-11 coach/r
 
 | 묶음 | 이슈 | 끝나면 보여줄 수 있는 것 |
 |---|---|---|
-| **M1 · 근거가 생긴다** | AI-6 · AI-8 | 처방 청크가 색인되고 연령 필터가 걸린 검색이 돈다 |
-| **M2 · 코치가 답한다** | AI-10 | 질문에 공단 자료를 인용해 답하고, 없으면 거부한다 |
-| **M3 · 미션을 편성한다** | AI-11 | 주간 제안이 인용과 함께 나오고 백엔드가 승인 게이트를 태운다 |
-| **M4 · 품질과 배포** | AI-7 · AI-12 | 영상 라벨로 검색이 좋아지고 두 컨테이너가 뜬다 |
+| **M1 · 미션을 편성한다** | AI-6 · AI-11 | 측정치와 비슷한 기록의 처방으로 주간 제안이 나오고 백엔드가 승인 게이트를 태운다 |
+| **M2 · 코치가 답한다** | AI-8 · AI-10 | 질문에 공단 자료를 인용해 답하고, 없으면 거부한다 |
+| **M3 · 영상과 배포** | AI-7 · AI-12 | 운동 이름에 영상이 붙고 두 컨테이너가 뜬다 |
 
 **보류** — AI-4(완료·호출부 없음) · AI-5 · AI-9. 계약에는 남는다. 소비자가 생기면
 그대로 동작한다.
 
-**M1 은 아무것도 기다리지 않는다.** `ai_documents` 가 사라져 벡터 저장소가 우리
-것이 됐고 ([AI-13](AI-13-backend-contract-reconciliation.md) §3.3), 임베딩 모델도
-우리가 고른다.
+**M1 은 아무것도 기다리지 않는다.** 원자료와 AI-6 산출물만 쓴다 — 임베딩이 필요 없고,
+LLM 은 문구에만 쓰며 실패해도 고정 문구로 돈다. 영상이 없으면 `video: null` 이다.
 
 ---
 
@@ -108,9 +105,9 @@ AI-7 영상 라벨링 ───┘                          └─ AI-11 coach/r
 판정(`02` §5.2 · 공단 기록과 99.6% 일치)과 다르지만, **앞으로의 구현은 백엔드를
 따른다** — 등급이 두 곳에서 다르게 나오면 사용자가 먼저 다친다.
 
-**단 `assessment` 는 그대로 둔다.** 이미 만들어졌고 호출부가 없어 충돌하지 않으며,
-`stats/grade.py` 는 `coach` 의 `assess` 노드가 대상 요인을 고르는 데 계속 쓴다.
-**coach 가 내보내는 등급 표기만 백엔드 값을 따른다.**
+**단 `assessment` 는 그대로 둔다.** 이미 만들어졌고 호출부가 없어 충돌하지 않는다.
+**coach 는 등급도 요인도 판정하지 않는다** — 비슷한 측정 기록의 처방을 가져온다
+([AI-11](AI-11-coach-runs.md) §1).
 
 > 백엔드 임계값은 주석에도 `▲ 확정 필요` 이고 합의 명세도 확정 대기다. 우리 실측
 > (`dev/AI-2` §5)을 넘겨 두면 확정할 때 근거가 된다.
