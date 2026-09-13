@@ -21,7 +21,11 @@ VectorBackend = Literal["pgvector", "faiss"]
 
 
 class Settings(BaseSettings):
-    model_config = SettingsConfigDict(env_file=".env", extra="ignore", case_sensitive=False)
+    # 빈 값은 설정하지 않은 것으로 본다. `.env.example` 을 복사하면 `SIM_THRESHOLD=` 처럼
+    # 빈 줄이 남는데, 그것을 숫자로 읽으려다 기동이 막히면 안 된다.
+    model_config = SettingsConfigDict(
+        env_file=".env", extra="ignore", case_sensitive=False, env_ignore_empty=True
+    )
 
     # 비밀값 — 없어도 기동한다. 쓰는 시점에 없으면 그 기능이 실패한다.
     database_url: str | None = None
