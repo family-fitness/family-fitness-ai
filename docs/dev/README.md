@@ -55,7 +55,7 @@ AI-7 영상 라벨링 ───┘                          └─ AI-11 coach/r
 | [AI-2](AI-2-grade-card.md) | 등급 판정과 또래 등급 분포 | AI-1 | ✅ |
 | [AI-3](AI-3-service-skeleton.md) | FastAPI 골격 | — | ✅ |
 | [AI-4](AI-4-assessment-endpoint.md) | `POST /fitness/assessment` | AI-2·3 | ✅ **보류** — 호출부 없음 |
-| **[AI-6](AI-6-prescription-corpus.md)** | 처방 어휘·청크 | AI-1 | ✅ |
+| **[AI-6](AI-6-prescription-corpus.md)** | 처방 어휘·청크 (등급 없는 층 + 등급 층) | AI-1 | ✅ |
 | **[AI-8](AI-8-vector-index.md)** | 임베딩·색인·검색 | AI-6 | **다음** — 임베딩 모델을 먼저 고른다 |
 | **[AI-10](AI-10-coach-messages.md)** | `POST /coach/messages` | AI-8 | 호출부 있음 |
 | **[AI-11](AI-11-coach-runs.md)** | 미션 편성 그래프 | AI-4·10 | 호출부·저장 자리 있음 |
@@ -111,6 +111,9 @@ AI-7 영상 라벨링 ───┘                          └─ AI-11 coach/r
 **단 `assessment` 는 그대로 둔다.** 이미 만들어졌고 호출부가 없어 충돌하지 않으며,
 `stats/grade.py` 는 `coach` 의 `assess` 노드가 대상 요인을 고르는 데 계속 쓴다.
 **coach 가 내보내는 등급 표기만 백엔드 값을 따른다.**
+
+처방 청크의 등급 층도 공단 기록 눈금이라, 조회 키는 `stats/grade.py` 로 판정한 등급을
+기본값으로 둔다. 확정은 [AI-6](AI-6-prescription-corpus.md) 미결 ⑤ 에서 한다.
 
 > 백엔드 임계값은 주석에도 `▲ 확정 필요` 이고 합의 명세도 확정 대기다. 우리 실측
 > (`dev/AI-2` §5)을 넘겨 두면 확정할 때 근거가 된다.

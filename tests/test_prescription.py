@@ -172,3 +172,78 @@ def test_적재는_어르신을_남기고_오류_나이를_거른다(tmp_path) -
     loaded = M.load_prescriptions(tmp_path)
     assert list(loaded[M.AGE_GROUP_COL]) == ["어르신", "유소년"]  # 오류 나이·빈 처방 제외
     assert list(loaded[M.AGE_COL]) == [70, 11]
+
+
+# ── 등급 층 (docs/04 §1.1) ───────────────────────────────────────────
+
+
+def gframe(rows: list) -> pd.DataFrame:
+    return pd.DataFrame(
+        rows,
+        columns=[M.AGE_GROUP_COL, M.AGE_COL, M.SEX_COL, M.GRADE_COL, M.PRESCRIPTION_COL],
+    )
+
+
+def gmany(grade: str | None, text: str, n: int = P.MIN_ROWS) -> list:
+    return [("유소년", 11, "F", grade, text)] * n
+
+
+def gbuild(rows: list) -> tuple[list[P.Chunk], list]:
+    df = gframe(rows)
+    return P.build_grade_chunks(df, P.build_vocabulary(df))
+
+
+def test_등급_층은_등급이_키와_인용에_들어간다() -> None:
+    (chunk,) = gbuild(gmany("1등급", "본운동:왕복달리기"))[0]
+    assert chunk.chunk_id == "prescription:유소년-11-F-1등급-본운동"
+    assert chunk.grade == "1등급"
+    assert chunk.citation_label == "국민체력100 운동처방 · 유소년 11세 · 1등급"
+
+
+def test_등급_없는_층의_키는_등급_층이_생겨도_그대로다() -> None:
+    """등급 층이 생기기 전에 저장된 인용이 끊기지 않는다 (docs/04 §1.1)."""
+    df = gframe(gmany("1등급", "본운동:왕복달리기") + gmany("참가", "본운동:왕복달리기"))
+    chunks, _ = P.build_chunks(df, P.build_vocabulary(df))
+    assert [c.chunk_id for c in chunks] == ["prescription:유소년-11-F-본운동"]
+    assert chunks[0].grade == ""
+
+
+def test_456등급은_참가로_접는다() -> None:
+    """계약의 등급은 넷이다 (docs/03 §3.4)."""
+    rows = (
+        gmany("4등급", "본운동:걷기", 10)
+        + gmany("5등급", "본운동:걷기", 10)
+        + gmany("6등급", "본운동:걷기", 10)
+    )
+    (chunk,) = gbuild(rows)[0]
+    assert chunk.chunk_id == "prescription:유소년-11-F-참가-본운동"
+    assert chunk.n == 30
+
+
+def test_표본_30_미만_등급_칸은_등급_층에서만_빠진다() -> None:
+    """등급 없는 층에서는 합쳐서 살아남는다 — 그 사람은 거기로 떨어진다."""
+    rows = gmany("1등급", "본운동:A", 20) + gmany("참가", "본운동:A", 20)
+    graded, skipped = gbuild(rows)
+    assert graded == []
+    assert skipped == [("유소년", 11, "F", "1등급", 20), ("유소년", 11, "F", "참가", 20)]
+    df = gframe(rows)
+    plain, _ = P.build_chunks(df, P.build_vocabulary(df))
+    assert [c.n for c in plain] == [40]
+
+
+def test_등급_미기재_행은_등급_층에서_빠진다() -> None:
+    chunks, _ = gbuild(gmany("1등급", "본운동:A") + gmany(None, "본운동:A", 5))
+    assert [c.n for c in chunks] == [P.MIN_ROWS]
+
+
+def test_등급_열이_없으면_등급_층은_비어_있다() -> None:
+    df = frame(many("유소년", 11, "F", "본운동:A"))
+    assert P.build_grade_chunks(df, P.build_vocabulary(df)) == ([], [])
+
+
+def test_등급_층도_같은_원자료면_같은_결과다() -> None:
+    """행 순서가 바뀌어도 같아야 한다 — 결정성의 유일한 방어다."""
+    rows = gmany("1등급", TEXT) + gmany("참가", "본운동:달리기,팔굽혀펴기")
+    first, _ = gbuild(rows)
+    second, _ = gbuild(list(reversed(rows)))
+    assert [(c.chunk_id, c.text) for c in first] == [(c.chunk_id, c.text) for c in second]

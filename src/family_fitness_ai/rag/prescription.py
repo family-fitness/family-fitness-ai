@@ -9,6 +9,9 @@
 `(연령구간, 나이, 성별, 단계)` 한 칸이고, 그 칸에서 처방된 운동을 빈도순으로 센 것이
 본문이다 (docs/04 §1.1).
 
+등급으로 한 번 더 나눈 층도 함께 낸다. 등급을 모르거나 그 등급 칸이 비면 등급 없는
+층으로 떨어진다.
+
 실행 (저장소 루트에서):
     python -m family_fitness_ai.rag.prescription --data-dir <원자료 디렉터리>
 """
@@ -26,9 +29,14 @@ import pandas as pd
 
 from ..common.types import age_unit_of
 from ..ingest import measurements as M
+from ..stats.distribution import fold_grades
+from ..stats.grade import GRADE_NAMES, PARTICIPATED
 
 SOURCE = "prescription"
 PHASES = ("준비운동", "본운동", "정리운동")
+
+# 등급 층의 등급. 4·5·6등급은 참가로 접는다 — 계약의 등급은 넷이다 (docs/03 §3.4).
+GRADES = (*GRADE_NAMES.values(), PARTICIPATED)
 
 # 단계 구분자는 앞뒤 공백이 있는 ` / ` 다. 운동명 안에 `/` 가 들어 있어
 # (`가슴/어깨 스트레칭`, `목 굽힘/ 폄 I`) 맨 `/` 로 가르면 이름이 쪼개진다.
@@ -115,64 +123,101 @@ class Chunk:
     age: int
     age_unit: str
     sex: str
+    grade: str  # 등급 없는 층은 빈 문자열
     phase: str
     n: int
     exercise_names: tuple[str, ...]
 
 
-def natural_key(age_group: str, age: int, sex: str, phase: str) -> str:
+def natural_key(age_group: str, age: int, sex: str, phase: str, grade: str = "") -> str:
     """**전부 구조로 정해진다.** 해시가 없다 (docs/dev/AI-6 §4 ①).
 
     원자료가 쌓이면 빈도가 바뀌어 내용 해시도 바뀌지만, 구조 키는 같은 칸이면 같다
-    — 저장된 인용이 끊기지 않는다 (docs/04 §5).
+    — 저장된 인용이 끊기지 않는다 (docs/04 §5). 등급 층은 등급이 키에 더 붙고, 등급
+    없는 층의 키는 등급이 없던 때와 같다.
     """
+    if grade:
+        return f"{age_group}-{age}-{sex}-{grade}-{phase}"
     return f"{age_group}-{age}-{sex}-{phase}"
 
 
-def citation_label(age_group: str, age: int) -> str:
-    """유아기는 개월이다 (docs/02 §2.4)."""
-    return f"국민체력100 운동처방 · {age_group} {age}{age_unit_of(age_group)}"  # type: ignore[arg-type]
+def citation_label(age_group: str, age: int, grade: str = "") -> str:
+    """유아기는 개월이다 (docs/02 §2.4). 등급 층은 등급을 덧붙인다."""
+    label = f"국민체력100 운동처방 · {age_group} {age}{age_unit_of(age_group)}"  # type: ignore[arg-type]
+    return f"{label} · {grade}" if grade else label
 
 
 def build_chunks(df: pd.DataFrame, vocabulary: list[Term]) -> tuple[list[Chunk], list[tuple]]:
-    """칸·단계마다 청크 하나. 표본 30 미만 칸은 만들지 않고 따로 돌려준다."""
+    """등급 없는 층. 칸·단계마다 청크 하나. 표본 30 미만 칸은 만들지 않고 따로 돌려준다.
+
+    등급을 모르는 사용자(측정값이 없거나 판정 불가)와 등급 칸이 비는 곳이 여기로
+    떨어진다 (docs/04 §1.1).
+    """
+    return _aggregate(df, vocabulary, by_grade=False)
+
+
+def build_grade_chunks(df: pd.DataFrame, vocabulary: list[Term]) -> tuple[list[Chunk], list[tuple]]:
+    """등급 층. `(연령구간, 나이, 성별, 등급, 단계)` 마다 청크 하나.
+
+    docs/04 §2.2·§3 이 처방 청크의 `grade` 를 메타데이터·필터로 규정했다. 같은 칸
+    안에서도 등급에 따라 처방이 달라진다 (docs/dev/AI-6 §5). 등급이 비어 있는 행은
+    이 층에서 빠지고 등급 없는 층에만 들어간다. 등급 열이 없으면 빈 층을 돌려준다.
+    """
+    if M.GRADE_COL not in df.columns:
+        return [], []
+    return _aggregate(df, vocabulary, by_grade=True)
+
+
+def _aggregate(
+    df: pd.DataFrame, vocabulary: list[Term], *, by_grade: bool
+) -> tuple[list[Chunk], list[tuple]]:
     display = {identity(t.name): t.name for t in vocabulary}
-    counts: dict[tuple[str, int, str], dict[str, Counter[str]]] = defaultdict(
+    counts: dict[tuple[str, int, str, str], dict[str, Counter[str]]] = defaultdict(
         lambda: defaultdict(Counter)
     )
-    rows: Counter[tuple[str, int, str]] = Counter()
+    rows: Counter[tuple[str, int, str, str]] = Counter()
+    grades = list(fold_grades(df[M.GRADE_COL])) if by_grade else [""] * len(df)
 
-    for age_group, age, sex, text in zip(
-        df[M.AGE_GROUP_COL], df[M.AGE_COL], df[M.SEX_COL], df[M.PRESCRIPTION_COL], strict=True
+    for age_group, age, sex, text, grade in zip(
+        df[M.AGE_GROUP_COL],
+        df[M.AGE_COL],
+        df[M.SEX_COL],
+        df[M.PRESCRIPTION_COL],
+        grades,
+        strict=True,
     ):
-        cell = (str(age_group), int(age), str(sex))
-        rows[cell] += 1
+        if by_grade and grade not in GRADES:
+            continue  # 등급 미기재 — 등급 없는 층에만 들어간다
+        key = (str(age_group), int(age), str(sex), str(grade))
+        rows[key] += 1
         for phase, names in parse(text).items():
             for raw in names:
-                counts[cell][phase][display[identity(raw)]] += 1
+                counts[key][phase][display[identity(raw)]] += 1
 
     chunks: list[Chunk] = []
     skipped: list[tuple] = []
-    for cell in sorted(counts):
-        age_group, age, sex = cell
-        n = rows[cell]
+    for key in sorted(counts):
+        age_group, age, sex, grade = key
+        n = rows[key]
         if n < MIN_ROWS:
-            skipped.append((*cell, n))
+            info = (age_group, age, sex, grade, n) if by_grade else (age_group, age, sex, n)
+            skipped.append(info)
             continue
         for phase in PHASES:
-            counter = counts[cell].get(phase)
+            counter = counts[key].get(phase)
             if not counter:
                 continue
             chosen = _cover(counter)
             chunks.append(
                 Chunk(
-                    chunk_id=f"{SOURCE}:{natural_key(age_group, age, sex, phase)}",
-                    text=_text(age_group, age, sex, phase, n, chosen),
-                    citation_label=citation_label(age_group, age),
+                    chunk_id=f"{SOURCE}:{natural_key(age_group, age, sex, phase, grade)}",
+                    text=_text(age_group, age, sex, grade, phase, n, chosen),
+                    citation_label=citation_label(age_group, age, grade),
                     age_group=age_group,
                     age=age,
                     age_unit=age_unit_of(age_group),  # type: ignore[arg-type]
                     sex=sex,
+                    grade=grade,
                     phase=phase,
                     n=n,
                     exercise_names=tuple(name for name, _ in chosen),
@@ -195,10 +240,18 @@ def _cover(counter: Counter[str]) -> list[tuple[str, float]]:
 
 
 def _text(
-    age_group: str, age: int, sex: str, phase: str, n: int, chosen: list[tuple[str, float]]
+    age_group: str,
+    age: int,
+    sex: str,
+    grade: str,
+    phase: str,
+    n: int,
+    chosen: list[tuple[str, float]],
 ) -> str:
     """임베딩 대상 본문. **원문을 센 것이지 요약한 것이 아니다** (docs/04 §2.1)."""
     who = f"{age_group} {age}{age_unit_of(age_group)} {'여자' if sex == 'F' else '남자'}"  # type: ignore[arg-type]
+    if grade:
+        who = f"{who} {grade}"
     listed = ", ".join(f"{name}({share:.0%})" for name, share in chosen)
     return f"{who} {n:,}명에게 처방된 {phase}: {listed}"
 
@@ -232,6 +285,7 @@ def chunks_frame(chunks: list[Chunk]) -> pd.DataFrame:
                 "age": c.age,
                 "age_unit": c.age_unit,
                 "sex": c.sex,
+                "grade": c.grade,
                 "phase": c.phase,
                 "n": c.n,
                 "exercise_names": ";".join(c.exercise_names),
@@ -251,6 +305,7 @@ def main(argv: list[str] | None = None) -> int:
     df = M.load_prescriptions(args.data_dir)
     vocabulary = build_vocabulary(df)
     chunks, skipped = build_chunks(df, vocabulary)
+    graded, graded_skipped = build_grade_chunks(df, vocabulary)
 
     release, interim = Path(args.release), Path(args.interim)
     release.mkdir(parents=True, exist_ok=True)
@@ -258,16 +313,24 @@ def main(argv: list[str] | None = None) -> int:
     # utf-8-sig — 검수하는 사람이 엑셀로 연다 (docs/02 §4)
     csv = {"index": False, "encoding": "utf-8-sig"}
     vocabulary_frame(vocabulary).to_csv(release / VOCABULARY_FILE, **csv)
-    chunks_frame(chunks).to_csv(interim / CHUNKS_FILE, **csv)
+    chunks_frame(chunks + graded).to_csv(interim / CHUNKS_FILE, **csv)
 
     merged = sum(1 for t in vocabulary if len(t.raw_forms) > 1)
     print(f"처방 행 {len(df):,} · 어휘 {len(vocabulary):,} (표기 차이로 합친 것 {merged})")
-    print(f"청크 {len(chunks):,} → {interim / CHUNKS_FILE}")
+    total = len(chunks) + len(graded)
+    print(f"청크 {total:,} (등급 없는 층 {len(chunks):,} · 등급 층 {len(graded):,})")
+    print(f"  → {interim / CHUNKS_FILE}")
     print(f"어휘 → {release / VOCABULARY_FILE}")
     if skipped:
         print(f"[알림] 표본 {MIN_ROWS} 미만이라 청크를 만들지 않은 칸 {len(skipped)}개")
         for ag, age, sex, n in skipped:
             print(f"  {ag} {age} {sex} · {n}명")
+    if graded_skipped:
+        dropped = sum(item[-1] for item in graded_skipped)
+        print(
+            f"[알림] 표본 {MIN_ROWS} 미만인 등급 칸 {len(graded_skipped)}개"
+            f" ({dropped:,}행) — 등급 없는 층으로 떨어진다"
+        )
     return 0
 
 

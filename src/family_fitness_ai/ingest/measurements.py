@@ -92,9 +92,13 @@ def load_prescriptions(data_dir: str | Path) -> pd.DataFrame:
     if not paths:
         raise FileNotFoundError(_no_csv_message(root))
 
-    cols = [AGE_GROUP_COL, AGE_COL, SEX_COL, PRESCRIPTION_COL]
+    # 등급은 등급 층 청크에 쓴다 (docs/04 §1.1). 열이 없는 파일도 읽히게 이름으로 고른다.
+    wanted = {AGE_GROUP_COL, AGE_COL, SEX_COL, GRADE_COL, PRESCRIPTION_COL}
     out = pd.concat(
-        [pd.read_csv(p, encoding="utf-8-sig", low_memory=False, usecols=cols) for p in paths],
+        [
+            pd.read_csv(p, encoding="utf-8-sig", low_memory=False, usecols=lambda c: c in wanted)
+            for p in paths
+        ],
         ignore_index=True,
     )
     out = out[out[PRESCRIPTION_COL].notna() & out[SEX_COL].isin(["M", "F"])]
