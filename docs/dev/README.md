@@ -14,7 +14,8 @@
 | `docs/01`~`04` | 확정. 백엔드 실물과 대조해 갱신했다 — [AI-13](AI-13-backend-contract-reconciliation.md) |
 | `stats/` · `ingest/` | **동작한다.** 원자료 → 점수 눈금 → 산출물 6종 → 채점 CLI |
 | `api/` · `common/` | **동작한다.** 설정·오류·로그·`/healthz`·`/readyz`·`/v1/fitness/assessment` |
-| `graph/` · `rag/` · `labeling/` | `__init__.py` 만 있다 — **여기가 남은 일이다** |
+| `rag/` | 처방 어휘·청크 산출 ([AI-6](AI-6-prescription-corpus.md)) |
+| `graph/` · `labeling/` | `__init__.py` 만 있다 — **여기가 남은 일이다** |
 | CI | `ruff` · `mypy` · `pytest` |
 
 **백엔드는 우리 다섯 경로를 부를 준비가 끝났다.** `AiGateway` 가 타임아웃·재시도까지
