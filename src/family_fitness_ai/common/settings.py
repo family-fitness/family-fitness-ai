@@ -18,6 +18,10 @@ from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 VectorBackend = Literal["pgvector", "faiss"]
+LabelerBackend = Literal["llama", "claude"]
+
+# 기본값이 있어 "설정했는가"가 뜻이 없는 이름. `configured()` 에 싣지 않는다.
+_NOT_REPORTED = frozenset({"vector_backend", "labeler_backend", "llama_server_url"})
 
 
 class Settings(BaseSettings):
@@ -40,13 +44,18 @@ class Settings(BaseSettings):
     vector_backend: VectorBackend = "faiss"
     # docs/04 §3 — 근거 없는 임계값은 조용히 관련 자료를 버린다. 기본값을 두지 않는다.
     sim_threshold: float | None = Field(default=None, ge=0.0, le=1.0)
+    # docs/dev/AI-7 §3.8 — 영상 라벨 LLM. 기본은 외부 호출이 없는 로컬이다 (AGENTS.md §3).
+    labeler_backend: LabelerBackend = "llama"
+    llama_server_url: str = "http://127.0.0.1:8081"
+    # 비우면 백엔드의 기본 모델이다.
+    labeler_model: str | None = None
 
     def configured(self) -> dict[str, bool]:
         """이름과 설정 여부만 돌려준다. **값을 로그에 찍지 않는다** (docs/01 §5)."""
         return {
             name: getattr(self, name) is not None
             for name in self.__class__.model_fields
-            if name != "vector_backend"
+            if name not in _NOT_REPORTED
         }
 
 

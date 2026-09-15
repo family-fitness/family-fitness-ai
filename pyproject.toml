@@ -5,12 +5,15 @@ description = "우리가족 체력키움 — AI 파트"
 requires-python = ">=3.11"
 # 확정된 스택은 docs/01 §1. 한 줄에 하나씩 둔다 — 여러 갈래에서 나눠 채운다.
 dependencies = [
+  "anthropic>=1.0",
   "fastapi>=0.115",
   "numpy>=1.26",
+  "ocrmac>=1.0; sys_platform == 'darwin'",
   "openpyxl>=3.1",
   "pandas>=2.2",
   "pydantic-settings>=2.4",
   "uvicorn>=0.30",
+  "youtube-transcript-api>=1.2",
 ]
 
 [project.optional-dependencies]

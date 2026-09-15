@@ -15,7 +15,8 @@
 | `stats/` · `ingest/` | **동작한다.** 원자료 → 점수 눈금 → 산출물 6종 → 채점 CLI |
 | `api/` · `common/` | **동작한다.** 설정·오류·로그·`/healthz`·`/readyz`·`/v1/fitness/assessment` |
 | `rag/` | 처방 어휘·청크 산출 ([AI-6](AI-6-prescription-corpus.md)) |
-| `graph/` · `labeling/` | `__init__.py` 만 있다 — **여기가 남은 일이다** |
+| `labeling/` | 수집 · 화면 이름표·이름 막대 · 규칙 라벨 · LLM 층 ([AI-7](AI-7-video-labeling.md)) — 영유아·청소년 43편: 운동명 32편 · 어휘 63개 · 시각 127/142. 채널 전체는 하지 않는다 |
+| `graph/` | `__init__.py` 만 있다 — **여기가 남은 일이다** |
 | CI | `ruff` · `mypy` · `pytest` |
 
 **백엔드는 우리 다섯 경로를 부를 준비가 끝났다.** `AiGateway` 가 타임아웃·재시도까지
@@ -55,10 +56,10 @@ AI-7 영상 라벨링 ────┤                                           
 | [AI-3](AI-3-service-skeleton.md) | FastAPI 골격 | — | ✅ |
 | [AI-4](AI-4-assessment-endpoint.md) | `POST /fitness/assessment` | AI-2·3 | ✅ **보류** — 호출부 없음 |
 | **[AI-6](AI-6-prescription-corpus.md)** | 처방 어휘·청크 | AI-1 | ✅ |
-| **[AI-8](AI-8-vector-index.md)** | 임베딩·색인·검색 | AI-6 | `coach/messages` 용. `coach/runs` 에는 필요 없다 |
+| **[AI-8](AI-8-vector-index.md)** | 임베딩·색인·검색 | AI-6 | `coach/messages` 용. `coach/runs` 에는 필요 없다. **다음 브랜치에서 진행·확정** |
 | **[AI-10](AI-10-coach-messages.md)** | `POST /coach/messages` | AI-8 | 호출부 있음 |
 | **[AI-11](AI-11-coach-runs.md)** | 미션 편성 — 비슷한 측정 기록 매칭 | AI-6 (영상은 AI-7) | **다음** · 호출부 있음 |
-| [AI-7](AI-7-video-labeling.md) | 영상 수집·라벨링 | — | 검색 품질용 |
+| [AI-7](AI-7-video-labeling.md) | 영상 수집·라벨링 | — | **진행 중** — 영유아 31편 끝 · 채널 전체 남음 |
 | [AI-5](AI-5-trajectory-bands.md) | `POST /fitness/trajectory` | AI-3 | 호출부 있으나 스텁으로 화면이 돈다 |
 | [AI-9](AI-9-videos-search.md) | `POST /videos/search` | AI-8 | 백엔드 자체 조회로 충분 |
 | [AI-12](AI-12-deploy.md) | 컨테이너·배포·관측 | AI-3 | 마지막 |
