@@ -48,7 +48,7 @@ missions:
 loadout:
 	python -m family_fitness_ai.mission.loadout
 
-## 의료 질의 낱말 목록과 오탐·누락 측정 (docs/04 §4.1).
+## 의료 질의 낱말 목록과 오탐·누락 측정 (docs/04).
 medical:
 	python -m family_fitness_ai.rag.medical
 
