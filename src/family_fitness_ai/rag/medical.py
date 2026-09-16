@@ -164,7 +164,7 @@ def is_medical(question: str, terms: dict[str, tuple[str, ...]] | None = None) -
 
 # 누락을 재는 질의. **`sim_queries.csv` 에 넣지 않는다** — 저쪽은 정답 청크가 있는
 # 세트이고 `threshold.scores()` 의 분모다. 정답 없는 행을 더하면 `false_positive` 가
-# 늘어 AI-8 §5 의 정밀도가 재현되지 않는다.
+# 늘어 잰 정밀도가 재현되지 않는다.
 MEDICAL_QUERIES: tuple[str, ...] = (
     "무릎이 아픈데 어떤 운동을 해야 해요?",
     "허리 디스크가 있어도 윗몸일으키기 해도 되나요?",

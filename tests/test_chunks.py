@@ -133,4 +133,4 @@ def test_처방_청크는_본문과_인용을_그대로_옮긴다() -> None:
     assert skipped == 1
     assert chunk["chunk_id"] == "prescription:유소년-11-F-본운동"
     assert chunk["source"] == "prescription"
-    assert chunk["fitness_factors"] == ""  # 처방문에 요인이 없다 (AI-6 §4 ③)
+    assert chunk["fitness_factors"] == ""  # 처방문에 요인이 없다

@@ -249,7 +249,7 @@ def test_어휘_밖_이름은_만들지_않는다() -> None:
 
 
 def test_라벨링_중간_산출물의_이름은_백엔드_적재_형식과_겹치지_않는다() -> None:
-    """한 이름을 둘이 쓰려 했다 (ReBuild.md §1.2 ④). 라벨링 중간 산출물이 비켰다."""
+    """한 이름을 둘이 쓰려 했다. 라벨링 중간 산출물이 비켰다."""
     assert L.LABELING_FILE == "video_labeling.csv"
     assert L.EXERCISE_COLUMNS[L.EXERCISE_COLUMNS.index("start_sec") + 1] == "end_sec"
 

@@ -1,8 +1,8 @@
-"""백엔드가 적재할 모양으로 접는다 (docs/05 · ReBuild §1.2 ④).
+"""백엔드가 적재할 모양으로 접는다 (docs/05).
 
 `exercise_videos` 표는 **영상 1편 = 1행**이다 (`V1__init.sql:170-187`). 우리
 `video_segments.csv` 는 구간 1개 = 1행이라, 한 영상의 구간 여럿이 한 줄로 접힌다.
-**그 손실은 인터페이스 확정 항목이다** (AI-14 §3.2 ㉤ · AI-13 §9) — 여기서 접는 것은
+**그 손실은 인터페이스 확정 항목이다** (docs/05) — 여기서 접는 것은
 지금 표가 받을 수 있는 모양이 그것뿐이기 때문이고, 우리 산출물은 구간을 그대로 들고 있다.
 
 **우리가 백엔드 저장소를 고치지 않는다** (AGENTS.md §2). 넣을 SQL 을 파일로 내고,
@@ -24,7 +24,7 @@ from ..common.settings import RELEASE_DIR
 from ..labeling.label import LABELING_FILE, watch_url
 from .segments import SEGMENTS_FILE, VideoSegment, read_segments
 
-# **이름은 `ReBuild` §1.2 ④ 가 정한 것이다.** 열은 `exercise_videos` 표를 그대로
+# 열은 `exercise_videos` 표를 그대로
 # 쓰지만 파일 이름은 `video_labels.csv` 다 — 라벨링 중간 산출물은 `interim/
 # video_labeling.csv` 로 갈라 두어 헷갈리지 않는다.
 VIDEOS_FILE = "video_labels.csv"
@@ -109,7 +109,7 @@ def build(
                 "age_to": age_to,
                 # 쉼표로 이은 한글 요인 (varchar(120)) — 우리 산출물은 세미콜론이다
                 "factors": ",".join(x for x in factors.split(";") if x),
-                # **잰 값이 없다.** 더미로 채우지 않는다 (AI-14 §5.3·§5.6)
+                # **잰 값이 없다.** 더미로 채우지 않는다
                 "intensity": None,
                 "space": None,
                 "noise": None,

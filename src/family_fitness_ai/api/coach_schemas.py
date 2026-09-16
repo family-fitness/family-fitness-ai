@@ -201,7 +201,7 @@ class Video(_Wire):
     """`AiWire.CoachRunResultBody.VideoBody`.
 
     **`end_sec` 자리가 백엔드에 없다.** 영상 구간의 끝은 보내지 않는다. 필드를
-    더하고 싶으면 먼저 백엔드에 자리가 생겨야 한다 (AI-13 안건).
+    더하고 싶으면 먼저 백엔드에 자리가 생겨야 한다 (docs/05).
     """
 
     video_id: str = Field(alias="video_id")

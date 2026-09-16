@@ -234,7 +234,7 @@ def factors_of(
 
 
 class Vocabulary:
-    """[AI-6] 처방 어휘. **이 안에서만 고른다** (docs/02)."""
+    """처방 어휘. **이 안에서만 고른다** (docs/02)."""
 
     def __init__(self, names: Iterable[str]) -> None:
         self._exact = {identity(n): n for n in names if identity(n)}

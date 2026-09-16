@@ -121,11 +121,11 @@ def check(
 def _vector(settings: Settings, index_dir: Path) -> tuple[str, bool, str]:
     """벡터 백엔드 연결. 두 백엔드가 같은 이름의 검사를 낸다 (docs/01 §1).
 
-    pgvector 확인은 배포에서 채운다 ([AI-12](../../../docs/01)) —
-    지금은 드라이버를 의존성에 넣지 않았다 (docs/01). AI-8 은 FAISS 경로만
+    pgvector 확인은 배포에서 채운다 (docs/01) —
+    지금은 드라이버를 의존성에 넣지 않았다 (docs/01). 지금은 FAISS 경로만
     세웠다. 색인이 서기 전까지 `/readyz` 는 준비되지 않았다고 답하고, 그것이 사실이다.
     """
     if settings.vector_backend == "faiss":
         ok = index_dir.exists() and any(index_dir.iterdir())
         return "vector", ok, f"로컬 인덱스가 없다: {index_dir}"
-    return "vector", False, "pgvector 연결 확인은 아직 없다 — 배포(AI-12)에서 채운다"
+    return "vector", False, "pgvector 연결 확인은 아직 없다 — 배포에서 채운다"

@@ -1,4 +1,4 @@
-"""`POST /v1/coach/runs` · `GET /v1/coach/runs/{run_id}` (docs/03 §5 · dev/AI-11).
+"""`POST /v1/coach/runs` · `GET /v1/coach/runs/{run_id}` (docs/03).
 
 **편성은 `POST` 안에서 끝낸다.** 계약은 비동기로 열어 두었지만 (15~40초를 예상한
 것은 LLM 을 태울 때다) 지금 편성은 커밋된 CSV 조회뿐이라 밀리초다. 태스크 큐를
@@ -65,7 +65,7 @@ def _segments() -> list[VideoSegment]:
 
 @lru_cache(maxsize=1)
 def _mission_set() -> list[MissionRow]:
-    """**추천의 검색 대상** (`missions.csv` · AI-14 §4). 기동 시 한 번 올린다."""
+    """**추천의 검색 대상** (`missions.csv`). 기동 시 한 번 올린다."""
     return read_missions()
 
 

@@ -1,4 +1,4 @@
-"""일일·주간 미션을 짠다 (docs/05 · AI-14 §8 ⑦).
+"""일일·주간 미션을 짠다 (docs/05).
 
 **일일과 주간은 기간으로만 가른다** (2026-09-16 결정). 주기를 담는 필드를 새로
 만들지 않는다 — 미션 하나의 `period` 가 하루면 일일, 이레면 주간이다.
@@ -12,7 +12,7 @@
 참이 되고, 실제로 하지 않은 것을 완료로 보고하는 자리가 없다.
 
 > **카드의 분을 더하면 실제의 두 배다.** 일일 3×15분과 주간 45분이 같은 45분을
-> 가리킨다. 프론트가 카드를 합산하지 않아야 한다 (AI-13 §9).
+> 가리킨다. 프론트가 카드를 합산하지 않아야 한다.
 
 **무엇을 추천할지는 `select` 가 미션 집합에서 정하고, LLM 은 카드 문구만 쓴다**
 (AGENTS.md §7). `writer` 를 주지 않으면 규칙 문구로 나가고 외부 호출이 0이다 —
@@ -111,7 +111,7 @@ class MemberPlan:
 
 
 def is_daily(mission: Mission) -> bool:
-    """일일 미션인가. **기간이 하루면 일일이다** (AI-11 §5.1).
+    """일일 미션인가. **기간이 하루면 일일이다**.
 
     주기를 담는 필드가 없으므로 이 판정이 규칙의 정본이다. 라우터·시험·문서가
     같은 함수를 본다 — 세 곳에 따로 쓰면 갈라진다.
@@ -227,7 +227,7 @@ def _copy_or_rules(
 
 
 def _title(picks: tuple[Candidate, ...]) -> str:
-    """운동 이름만. **「오늘 · 」 같은 접두어를 붙이지 않는다** (AI-11 §5.1) —
+    """운동 이름만. **「오늘 · 」 같은 접두어를 붙이지 않는다** —
     기간에 이미 있는 값이고 120자에서 잘리면 뒤가 조용히 깨진다."""
     return " · ".join(p.exercise_name for p in picks)
 
@@ -331,7 +331,7 @@ def members(
         match = find_cells(cells, age_group, age, age_unit, sex)
         if not match.found:
             continue
-        # **미션 집합에서 찾는다** (AI-14 §4). 칸(`match`)은 나이 당김과 인용 문구에
+        # **미션 집합에서 찾는다.** 칸(`match`)은 나이 당김과 인용 문구에
         # 쓰고, 후보는 이미 만들어 둔 표에서 대상 라벨로 좁힌다.
         pool = from_missions(mission_set, match, age=age, age_unit=age_unit, sex=sex)
         picks = select(pool, days_per_week, rotate=rotate)

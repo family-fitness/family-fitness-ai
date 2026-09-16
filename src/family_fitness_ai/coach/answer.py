@@ -1,4 +1,4 @@
-"""`POST /v1/coach/messages` 의 속 (docs/03 §6 · docs/04 §4 · dev/AI-10).
+"""`POST /v1/coach/messages` 의 속 (docs/03 · docs/04).
 
 **LLM 이 찾은 청크로 문구를 쓰고, 발췌가 대체 경로다** (docs/01 §3.1 — 「`compose`
 문장 생성 (LLM 1회)」 · 「실패 시 규칙 편성으로 강등」). `COACH_LLM` 이 꺼져 있으면

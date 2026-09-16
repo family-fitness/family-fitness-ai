@@ -1,4 +1,4 @@
-"""미션 집합 (docs/05 · ReBuild §1.2 ⑤).
+"""미션 집합 (docs/05).
 
     미션 = 운동 × 영상 구간 × 라벨
 
@@ -44,7 +44,7 @@ MISSION_COLUMNS = [
     "video_id",
     "start_sec",
     "end_sec",
-    # `video_id` 로 만든 재생 주소. **키가 아니라 딸린 값이다** (AI-14 §4)
+    # `video_id` 로 만든 재생 주소. **키가 아니라 딸린 값이다**
     "url",
     # **영상의 연령대.** 연령 필터의 입력이다 (`select.video_allowed` · docs/02 §2.3) —
     # 이 열이 없으면 표에서 읽은 미션의 영상이 「연령 미상」이 되어 아이에게 하나도
@@ -68,10 +68,10 @@ MISSION_COLUMNS = [
 # **채우지 않는 열**과 그 이유. 더미로 메우지 않는다 (AGENTS.md §4).
 #
 # `intensity` — 구간 길이 삼등분이 근거인데 `gap` 필터가 마지막 구간을 구조적으로
-#   못 걸러낸다 (AI-14 §5.3 · §5.2). 그 결함이 정리되기 전에는 쓰지 않는다
+#   못 걸러낸다. 그 결함이 정리되기 전에는 쓰지 않는다
 # `indoor` — 운동 표(`exercises.csv`)에서 와야 하는데 ① 어휘 정제가 보류다
 # `targets` 의 항목·등급 — `prescription_cells.csv` 에 `item_code`·`grade` 축이
-#   없다 (AI-14 §5.5 의 등급 계산을 아직 붙이지 않았다). 지금은 `연령대-성별` 까지다
+#   없다 — 등급 계산을 아직 붙이지 않았다. 지금은 `연령대-성별` 까지다
 NOT_FILLED = ("intensity", "indoor")
 
 
@@ -92,7 +92,7 @@ class Mission:
 
     @property
     def mission_id(self) -> str:
-        """`{exercise_id}@{video_id}#{start_sec}` — 결정적이다 (ReBuild §1.2 ⑤).
+        """`{exercise_id}@{video_id}#{start_sec}` — 결정적이다.
 
         영상이 없으면 뒤를 비운다 — 그 운동의 미션이 하나뿐이라는 뜻이다.
         """

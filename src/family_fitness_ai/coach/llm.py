@@ -50,7 +50,7 @@ DEADLINE_SEC = 7.0
 # **Gemini 는 7초를 거부한다** — 「Manually set deadline 7s is too short. Minimum
 # allowed deadline is 10s」 (2026-09-16 실측). 그 최소값이 백엔드 예산 전부와 같아서
 # **Gemini 경로에는 강등할 틈이 없다**: 모델이 오래 끌면 우리가 발췌로 내려앉기 전에
-# 백엔드가 먼저 끊는다. 예산을 넓히는 것은 계약 문제라 AI-13 에 올린다.
+# 백엔드가 먼저 끊는다. 예산을 넓히는 것은 계약 문제다 (docs/05).
 GEMINI_DEADLINE_SEC = 10.0
 
 # 짧은 인용 답변이라 깊이 생각할 일이 아니다. **생각을 끄지는 않는다** —

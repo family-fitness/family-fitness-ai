@@ -1,6 +1,6 @@
 """영상 구간 — 운동 하나를 보여주는 동안 (docs/05).
 
-[AI-7] 은 운동마다 **시작 시각**만 냈다. 미션에는 끝이 있어야 한다 — 몇 분 하는
+라벨링은 운동마다 **시작 시각**만 낸다. 미션에는 끝이 있어야 한다 — 몇 분 하는
 운동인지 모르면 미션 문구도 완료 판정도 만들 수 없다.
 
 **길이는 시작 시각 사이로 잰다.** 이름표가 사라진 시점으로 재면 운동이 이어지는데도
@@ -347,10 +347,10 @@ def stats(segments: list[VideoSegment]) -> list[tuple[str, str, str]]:
 def stats_frame(rows: list[tuple[str, str, str]]) -> pd.DataFrame:
     return pd.DataFrame(
         [
-            {"group": g, "metric": m, "measured": v, "claimed_in_AI-14": CLAIMED.get((g, m), "")}
+            {"group": g, "metric": m, "measured": v, "claimed": CLAIMED.get((g, m), "")}
             for g, m, v in rows
         ],
-        columns=["group", "metric", "measured", "claimed_in_AI-14"],
+        columns=["group", "metric", "measured", "claimed"],
     )
 
 

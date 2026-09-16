@@ -137,7 +137,7 @@ def run_missions(url: str, members: list[Json], start: str, days: int, minutes: 
     print(f"\n   미션 {len(missions)}건 · 인용 {len(citations)}건")
     for mission in missions:
         period = mission["period"]
-        # 일일·주간은 **기간으로만** 가른다 (AI-11 §5.1) — 프론트도 이 규칙을 쓴다
+        # 일일·주간은 **기간으로만** 가른다 — 프론트도 이 규칙을 쓴다
         kind = "일일" if period["start_date"] == period["end_date"] else "주간"
         who = ",".join(p["ref"] for p in mission["participants"])
         print(f"\n   [{kind}] {period['start_date']} ~ {period['end_date']}  ({who})")

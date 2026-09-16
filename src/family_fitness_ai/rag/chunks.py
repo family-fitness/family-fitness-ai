@@ -2,8 +2,8 @@
 
 세 소스를 같은 열로 낸다.
 
-- `prescription` — [AI-6] 이 이미 만든 처방 청크를 그대로 싣는다
-- `video` — [AI-7] 의 영상 라벨. **영상 1편이 청크 1개**다
+- `prescription` — `rag.prescription` 이 만든 처방 청크를 그대로 싣는다
+- `video` — `labeling` 이 낸 영상 라벨. **영상 1편이 청크 1개**다
 - `criteria` — 등급 기준표를 항목×연령구간×성별로 묶는다
 
 **`chunk_id` 는 내용에서만 나온다** (docs/04 §1). 순번도 수집 시각도 쓰지 않는다 —
@@ -32,12 +32,12 @@ from ..stats.items import ITEMS
 # `data/interim` 은 `.gitignore` 의 `data/*` 에 걸려 커밋되지 않는다 — 새 클론에서
 # 색인을 다시 세울 수 없으면 `coach/messages` 를 배포할 수 없다 (docs/02 §4).
 CHUNKS_FILE = "chunks.csv"
-# AI-6 §5 · AI-7 §4 가 내는 파일
+# 처방·라벨링이 내는 파일
 PRESCRIPTION_FILE = "prescription_chunks.csv"
 VIDEO_LABELING_FILE = "video_labeling.csv"
 VIDEO_EXERCISES_FILE = "video_exercises.csv"
 VIDEOS_FILE = "videos.csv"
-# AI-2 가 커밋해 둔 기준표
+# 커밋해 둔 등급 기준표
 THRESHOLDS_FILE = "grade_thresholds.csv"
 
 CHUNK_COLUMNS = [
@@ -65,7 +65,7 @@ def mmss(seconds: str) -> str:
 
 
 def prescription_chunks(chunks: pd.DataFrame) -> tuple[list[Row], int]:
-    """AI-6 이 만든 청크를 공통 열로 옮긴다. 본문·인용·id 를 그대로 쓴다."""
+    """처방 청크를 공통 열로 옮긴다. 본문·인용·id 를 그대로 쓴다."""
     out, skipped = [], 0
     for row in chunks.to_dict("records"):
         if not row["age_group"]:
@@ -79,7 +79,7 @@ def prescription_chunks(chunks: pd.DataFrame) -> tuple[list[Row], int]:
                 "citation_label": row["citation_label"],
                 "citation_url": "",
                 "age_group": row["age_group"],
-                # 처방문에 요인이 없다 (AI-6 §4 ③)
+                # 처방문에 요인이 없다
                 "fitness_factors": "",
                 "grade": "",
             }
@@ -92,7 +92,7 @@ def video_chunks(
 ) -> tuple[list[Row], int]:
     """영상 1편 = 청크 1개. 본문에 운동 이름과 그 시각을 싣는다.
 
-    공통 준비·마무리는 뒤에 따로 적는다 (AI-7 §3.10) — 본운동과 섞이면 어느 영상이나
+    공통 준비·마무리는 뒤에 따로 적는다 — 본운동과 섞이면 어느 영상이나
     같은 문장이 되어 검색이 변별하지 못한다.
 
     운동 이름이 하나도 안 붙은 영상은 본문이 짧다. **부모 문맥을 붙인다** — 재생목록
@@ -146,7 +146,7 @@ def video_chunks(
 
 
 def _first_line(description: str) -> list[str]:
-    """설명문의 첫 줄. 해시태그 줄은 영상마다 같은 상용구라 건너뛴다 (AI-7 §3.2)."""
+    """설명문의 첫 줄. 해시태그 줄은 영상마다 같은 상용구라 건너뛴다."""
     for line in description.splitlines():
         text = line.strip()
         if text and not text.startswith("#"):

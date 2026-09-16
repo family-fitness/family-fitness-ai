@@ -46,7 +46,7 @@ def test_측정값이_없으면_요인을_지목하지_않는다(client: TestCli
     """연령만으로 요인을 고르면 그 값에는 인용할 것이 없다 (docs/03).
 
     빈 자리를 문구로 채우지 않는다 — `focus_one: null` 이면 호출자는 제안이 없음을
-    안다. 제안은 코퍼스가 선 뒤(AI-8) 근거와 함께 붙는다.
+    안다. 제안은 코퍼스가 선 뒤 근거와 함께 붙는다.
     """
     for kwargs in ({}, {"height_cm": 148.0, "weight_kg": 41.0}):
         child = post(client, **kwargs)["child_scope"]

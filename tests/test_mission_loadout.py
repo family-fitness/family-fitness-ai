@@ -1,4 +1,4 @@
-"""`exercise_videos` 적재 형식 (docs/05 · ReBuild §1.2 ④)."""
+"""`exercise_videos` 적재 형식 (docs/05)."""
 
 from __future__ import annotations
 

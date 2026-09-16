@@ -1,4 +1,4 @@
-"""`POST /v1/coach/messages` (docs/03 §6 · docs/04 §4 · dev/AI-10).
+"""`POST /v1/coach/messages` (docs/03 · docs/04).
 
 **가짜 임베더와 작은 색인으로 돈다** — 시험이 외부를 부르지 않는다. LLM 도 가짜를
 끼워 넣는다 (`AnswerWriter` 프로토콜).
