@@ -14,9 +14,8 @@
 | 웹서버와 무엇을 주고받나 · 필드는 무엇인가 | `docs/03-인터페이스-명세.md` |
 | 코치가 무엇을 근거로 답하나 | `docs/04-RAG-코퍼스-규약.md` |
 | 브랜치 · 커밋 · PR | `CONTRIBUTING.md` |
-| 기능 하나의 실행 방법·산출물·한계 | `docs/dev/<이슈ID>-<이름>.md` |
-| 구현 순서 · 무엇이 무엇을 막고 있나 | `docs/dev/README.md` |
-| 백엔드와 어긋나는 곳 | `docs/dev/AI-13-backend-contract-reconciliation.md` |
+| 코치가 어떻게 도나 · 데이터 구조 · 남은 할 일 | `docs/05-코치-설계.md` |
+| 백엔드 구현과 어긋나는 곳 | `docs/05-코치-설계.md` §2.4 |
 
 **코드 구역은 문서와 1:1이다.** `src/family_fitness_ai/` 각 패키지의 `__init__.py`에
 그 구역의 규약이 어느 절인지 적혀 있다.
@@ -63,7 +62,7 @@ pre-commit install                     # 커밋 훅 (ruff)
 git config core.hooksPath .githooks    # 브랜치·커밋 메시지 검사
 ```
 
-**아래의 모든 명령과 `docs/dev` 의 실행 예시는 venv 를 켠 상태를 전제한다.**
+**아래의 모든 명령과 `docs/05` §7 의 실행 예시는 venv 를 켠 상태를 전제한다.**
 새 셸마다 다시 켠다 — `make` 도 그 셸의 `python` 을 쓴다.
 
 ```bash
@@ -73,9 +72,10 @@ source .venv/bin/activate
 품질 검사 — `make verify` 가 CI 와 같은 것을 돈다
 
 ```bash
-make lint    # ruff check + format --check
-make types   # mypy
-make test    # pytest
+make lint       # ruff check + format --check
+make types      # mypy
+make test       # pytest
+make wire-check # 우리가 내는 이름이 백엔드 AiWire.kt 와 같은지 (백엔드가 없으면 skip)
 make verify
 ```
 
@@ -84,11 +84,13 @@ make verify
 ```bash
 make distribution DATA_DIR=~/받은자료/kspo-measure
 python -m family_fitness_ai.rag.prescription --data-dir ~/받은자료/kspo-measure   # 처방 어휘·청크
+make prescription-cells DATA_DIR=~/받은자료/kspo-measure                        # 처방 칸 표
+make segments                                                                   # 영상 구간 (라벨링·청크 뒤)
 ```
 
 ## 6. 현재 상태
 
-진행 상태의 정본은 `docs/dev/README.md` §1 이다. 코드를 새로 넣을 때는 그 구역의
+진행 상태의 정본은 `docs/05-코치-설계.md` §5 다. 코드를 새로 넣을 때는 그 구역의
 문서(§1)를 먼저 읽고, 문서에 없는 규칙을 코드로 만들지 않는다.
 
 ## 7. 작업 방식
@@ -100,5 +102,5 @@ python -m family_fitness_ai.rag.prescription --data-dir ~/받은자료/kspo-meas
   문구만 쓴다
 - **재지 않은 것을 사실로 쓰지 않는다.** 수치에는 실행한 스크립트나 산출물이 있어야 한다
 - **"처방"은 운동·영상 추천을 부르는 말이다.** 의료·법률 표현으로 다루지 않는다
-- **문서는 짧게 쓴다.** `docs/dev` 에 변경 내역·검토 내역 절을 만들지 않는다. 나중에
-  할 일은 그 내용이 속한 절 안에 "이후 적용"으로 적는다
+- **문서는 짧게 쓴다.** 변경 내역·검토 내역 절을 만들지 않는다. 나중에 할 일은
+  `docs/05` §5(순서)나 §6(없는 것)에 적는다 — 새 문서를 만들지 않는다
