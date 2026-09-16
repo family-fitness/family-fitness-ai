@@ -1,4 +1,4 @@
-"""`POST /v1/fitness/assessment` (docs/dev/AI-4).
+"""`POST /v1/fitness/assessment` (docs/03).
 
 이미 있는 계산을 계약 모양으로 내보낸다. 새로 하는 일은 `child_scope`/`parent_scope`
 분리와 문구 생성뿐이고, **LLM 호출이 없다** (docs/01 §3.1).
@@ -34,7 +34,7 @@ router = APIRouter(prefix="/v1/fitness", tags=["fitness"])
 
 @lru_cache(maxsize=1)
 def reference() -> A.Reference:
-    """산출물은 기동 시 한 번 올린다. 요청마다 CSV를 읽지 않는다 (docs/dev/AI-4 §1)."""
+    """산출물은 기동 시 한 번 올린다. 요청마다 CSV를 읽지 않는다 (docs/03)."""
     return A.Reference(RELEASE_DIR)
 
 
@@ -87,7 +87,7 @@ def assessment(request: AssessmentRequest) -> AssessmentResponse:
 
 
 def _input_level(request: AssessmentRequest, factors: list[FactorScore]) -> InputLevel:
-    """**`measurements` 가 왔다고 `L2` 가 아니다** (docs/dev/AI-4 §2).
+    """**`measurements` 가 왔다고 `L2` 가 아니다** (docs/03).
 
     그 연령 구간의 기준항목이 아니면 점수가 안 나온다. 하나도 안 나오면 위 표로
     되돌아간다 — 신장·체중이 있으면 `L1`, 없으면 `L0` 이다.
@@ -103,7 +103,7 @@ def _input_level(request: AssessmentRequest, factors: list[FactorScore]) -> Inpu
 def _factor(age_group: AgeGroup, f: A.FactorScore) -> FactorScore:
     """`n < 30` 이면 `score`·`percentile` 을 `null` 로 내린다.
 
-    **API 경계에서 내린다** (docs/dev/AI-4 §4). 산출물이나 `stats` 안에서 지우면
+    **API 경계에서 내린다** (docs/03). 산출물이나 `stats` 안에서 지우면
     진단 CLI도 함께 눈이 멀고, `docs/02` §6 ③ 이 반대로 확정되면 되돌릴 값이 없다.
     """
     low = f.n < MIN_SAMPLE
@@ -126,7 +126,7 @@ def _child(scored: list[FactorScore]) -> ChildScope:
 
     **점수가 없으면 요인을 지목하지 않는다.** 어느 요인을 권할 근거가 없기 때문이다.
     그때는 `focus_one` 이 `null` 이고, 빈 화면에 무엇을 쓸지는 호출자가 정한다 —
-    요인도 점수도 없는 문구라 AI가 소유할 이유가 없다 (docs/dev/AI-4 §3.1).
+    요인도 점수도 없는 문구라 AI가 소유할 이유가 없다 (docs/03).
     """
     if not scored:
         return ChildScope(focus_one=None)
@@ -135,7 +135,7 @@ def _child(scored: list[FactorScore]) -> ChildScope:
 
 
 def _parent_copy(scored: list[FactorScore]) -> ParentCopy:
-    """`strength` 는 잘하고 있는 요인 중 최고, `focus` 는 최저 (docs/dev/AI-4 §3.3)."""
+    """`strength` 는 잘하고 있는 요인 중 최고, `focus` 는 최저 (docs/03)."""
     if not scored:
         return ParentCopy(**C.NO_MEASUREMENT_PARENT)
 
@@ -146,7 +146,7 @@ def _parent_copy(scored: list[FactorScore]) -> ParentCopy:
     focus = C.parent_line(lowest.factor, lowest.band or "steady")
 
     # 둘이 같은 요인이면 같은 문장이 두 번 나간다. 하나만 재고 두 가지를 말할 수
-    # 없으므로 그 사실을 적는다 (docs/dev/AI-4 §3.3).
+    # 없으므로 그 사실을 적는다 (docs/03).
     if top.factor == lowest.factor:
         return ParentCopy(strength=C.SINGLE_FACTOR_STRENGTH, focus=focus)
     return ParentCopy(strength=C.parent_line(top.factor, top.band or "steady"), focus=focus)

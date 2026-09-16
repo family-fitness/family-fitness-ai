@@ -1,4 +1,4 @@
-"""영상 라벨 — 적혀 있는 것만 규칙으로 옮긴다 (docs/dev/AI-7 §3).
+"""영상 라벨 — 적혀 있는 것만 규칙으로 옮긴다 (docs/02).
 
 **LLM 보다 규칙이 먼저다** (AGENTS.md §7). 제목·재생목록·화면 이름표·설명문·자막에 적힌
 낱말을 라벨로 옮기고, 적혀 있지 않으면 비운다. 추정하지 않는다.
@@ -26,14 +26,15 @@ from . import collect as C
 # docs/01 §3.3. v2 는 화면 이름표를, v3 는 아래 이름 막대를 읽는다.
 LABELER_VERSION = "labeler:rules/v3"
 
-LABELS_FILE = "video_labels.csv"
+# 라벨링 중간 산출물. 백엔드 적재 형식과 이름이 겹치지 않게 `labeling` 으로 쓴다.
+LABELING_FILE = "video_labeling.csv"
 EXERCISES_FILE = "video_exercises.csv"
 
-# 서비스 대상이 아니다. 라벨하지 않는다 (docs/dev/AI-7 §3.5).
+# 서비스 대상이 아니다. 라벨하지 않는다 (docs/02).
 EXCLUDED_PLAYLISTS = frozenset({"PLBdpvOnWjVZlsOa_LGjvlta7sg3NBFbqs"})  # 연령별 맞춤 운동 : 중장년
 
 # 연령대 이름과, 재생목록이 연령대 대신 쓰는 낱말 둘(`영유아`·`청년`)만 옮긴다.
-# `유아`·`유치원생`·`초등학생` 은 옮기지 않는다 — 옮기면 추정이 된다 (docs/dev/AI-7 §3.1).
+# `유아`·`유치원생`·`초등학생` 은 옮기지 않는다 — 옮기면 추정이 된다 (docs/02).
 AGE_WORDS: dict[str, AgeGroup] = {
     "영유아": "유아기",
     "유아기": "유아기",
@@ -52,13 +53,13 @@ FACTOR_WORDS: dict[str, FitnessFactor] = {
     "협응성": "협응력",
 }
 
-# 공단 설명문의 해시태그는 영상마다 같은 상용구다. 읽지 않는다 (docs/dev/AI-7 §3.2).
+# 공단 설명문의 해시태그는 영상마다 같은 상용구다. 읽지 않는다 (docs/02).
 HASHTAG = re.compile(r"#\S+")
 
-# 믿는 순서. 같은 이름이 여러 곳에서 잡히면 앞의 것을 남긴다 (docs/dev/AI-7 §3.4).
+# 믿는 순서. 같은 이름이 여러 곳에서 잡히면 앞의 것을 남긴다 (docs/02).
 SOURCES = ("title", "screen", "screen_bar", "description", "captions")
 
-# 화면 이름표 (docs/dev/AI-7 §3.7). 윗줄에는 `편` 이 들어간다 — `(응용편) 민첩성·순발력·협응성`.
+# 화면 이름표 (docs/02). 윗줄에는 `편` 이 들어간다 — `(응용편) 민첩성·순발력·협응성`.
 HEADER_MARK = "편"
 # 한 프레임에만 읽힌 이름은 글자 인식 잡음이다.
 MIN_FRAMES = 2
@@ -66,11 +67,11 @@ MIN_FRAMES = 2
 # `협응성` 을 `협성` 으로 읽는 프레임이 있다.
 FACTOR_SHARE = 0.3
 
-# 아래 이름 막대의 번호·느낌표와 괄호 속 다른 이름 (docs/dev/AI-7 §3.9).
+# 아래 이름 막대의 번호·느낌표와 괄호 속 다른 이름 (docs/02).
 _BAR_NUMBER = re.compile(r"^\s*\d+\s*[.)]\s*")
 _BAR_ALIAS = re.compile(r"(.+?)\s*\((.+)\)")
 
-# 같은 재생목록 이만큼의 영상에 똑같이 나오는 이름은 공통 준비·마무리다 (docs/dev/AI-7 §3.10).
+# 같은 재생목록 이만큼의 영상에 똑같이 나오는 이름은 공통 준비·마무리다 (docs/02).
 # 실측: 영유아 4개 이름이 11편, 청소년 7개 이름이 5~6편, 그다음이 2편이라 3~5 어디든 같다.
 COMMON_MIN_VIDEOS = 3
 
@@ -103,6 +104,9 @@ EXERCISE_COLUMNS = [
     "fitness_factors",
     "age_group",
     "start_sec",
+    # 이름표가 사라진 시각. 구간의 끝은 다음 운동의 시작으로 재므로 여기서는 닫지 않는다
+    # — 그 계산은 mission/segments.py 가 한다 (docs/05 §3.2)
+    "end_sec",
     "url",
 ]
 
@@ -121,7 +125,7 @@ def find_words(text: str, table: Mapping[str, T]) -> list[T]:
 
 
 def age_of(title: str, playlist_titles: Iterable[str]) -> tuple[AgeGroup | None, str]:
-    """제목·재생목록에 **적힌** 연령만 (docs/dev/AI-7 §3.1). 태그·설명문·자막은 보지 않는다.
+    """제목·재생목록에 **적힌** 연령만 (docs/02). 태그·설명문·자막은 보지 않는다.
 
     **제목에 적힌 연령이 재생목록보다 앞선다** — 「연령별 맞춤 운동 : 청소년」 재생목록에
     `[유소년]` 영상이 섞여 있다. 제목에 없을 때만 재생목록을 본다.
@@ -159,7 +163,7 @@ def _screen_key(text: str) -> str:
 
 
 def screen_segments(frames: Iterable[Mapping[str, Any]], field: str = "texts") -> list[Segment]:
-    """프레임마다 읽은 글자 → 구간 (docs/dev/AI-7 §3.7). `field` 는 읽은 자리다.
+    """프레임마다 읽은 글자 → 구간 (docs/02). `field` 는 읽은 자리다.
 
     윗줄이 아닌 마지막 줄이 이름이다. 같은 이름이 이어지는 동안이 한 구간이고, 이름표가
     잠깐 사라졌다 다시 떠도 사이에 다른 이름이 없으면 잇는다. 한 프레임에만 읽힌 이름은
@@ -219,7 +223,7 @@ def _mmss(sec: int) -> str:
 def factors_of(
     title: str, segments: Iterable[Segment] = ()
 ) -> tuple[tuple[FitnessFactor, ...], str]:
-    """제목과 화면 이름표 윗줄에 적힌 요인. 설명문은 보지 않는다 (docs/dev/AI-7 §3.2)."""
+    """제목과 화면 이름표 윗줄에 적힌 요인. 설명문은 보지 않는다 (docs/02)."""
     found = set(find_words(title, FACTOR_WORDS))
     evidence = [f"제목: {title}"] if found else []
     for s in segments:
@@ -230,7 +234,7 @@ def factors_of(
 
 
 class Vocabulary:
-    """[AI-6] 처방 어휘. **이 안에서만 고른다** (docs/dev/AI-7 §3.3)."""
+    """[AI-6] 처방 어휘. **이 안에서만 고른다** (docs/02)."""
 
     def __init__(self, names: Iterable[str]) -> None:
         self._exact = {identity(n): n for n in names if identity(n)}
@@ -270,6 +274,7 @@ class Match:
     source: str  # SOURCES 중 하나
     evidence: str  # 잡힌 줄 원문
     start_sec: int | None = None  # 화면에서만
+    end_sec: int | None = None  # 이름표가 사라진 시각. 화면에서만
     factors: tuple[FitnessFactor, ...] = ()  # 화면 이름표 윗줄에서만
     common: bool = False  # 여러 영상에 똑같이 나오는 준비·마무리 (§3.10)
 
@@ -286,7 +291,7 @@ def match_lines(vocab: Vocabulary, text: str, source: str) -> list[Match]:
 def match_screen(vocab: Vocabulary, segments: Iterable[Segment]) -> list[Match]:
     """이름표 이름이 어휘와 같을 때. 근거는 `시각 이름표` 이고 시작 시각과 윗줄 요인을 싣는다."""
     return [
-        Match(name, "screen", f"{_mmss(s.start_sec)} {s.name}", s.start_sec, s.factors)
+        Match(name, "screen", f"{_mmss(s.start_sec)} {s.name}", s.start_sec, s.end_sec, s.factors)
         for s in segments
         for name, _, _ in vocab.find(identity(s.name))
     ]
@@ -303,7 +308,7 @@ def bar_names(text: str) -> list[str]:
 
 
 def match_bar(vocab: Vocabulary, segments: Iterable[Segment]) -> list[Match]:
-    """아래 이름 막대 (docs/dev/AI-7 §3.9). **이름이 어휘와 통째로 같을 때만** 붙인다.
+    """아래 이름 막대 (docs/02). **이름이 어휘와 통째로 같을 때만** 붙인다.
 
     같은 자리에 설명·안전 문장도 뜬다 (`사이드 스텝으로 활동한다`). 부분 일치를 허용하면
     문장 속 낱말이 운동 이름이 된다. 통째가 어휘에 없을 때만 괄호 속 이름을 따로 본다.
@@ -313,7 +318,7 @@ def match_bar(vocab: Vocabulary, segments: Iterable[Segment]) -> list[Match]:
         whole, *parts = bar_names(s.name)
         names = [vocab.exact(whole)] if vocab.exact(whole) else [vocab.exact(p) for p in parts]
         out += [
-            Match(name, "screen_bar", f"{_mmss(s.start_sec)} {s.name}", s.start_sec)
+            Match(name, "screen_bar", f"{_mmss(s.start_sec)} {s.name}", s.start_sec, s.end_sec)
             for name in names
             if name
         ]
@@ -345,9 +350,9 @@ def exercise_matches(
     segments: Iterable[Segment] = (),
     bar: Iterable[Segment] = (),
 ) -> list[Match]:
-    """이름마다 가장 믿을 만한 곳 하나 (docs/dev/AI-7 §3.4).
+    """이름마다 가장 믿을 만한 곳 하나 (docs/02).
 
-    제목에서 잡힌 이름도 시각과 요인은 화면에서 가져온다 — 그 둘은 화면에만 있다.
+    제목에서 잡힌 이름도 시각과 요인은 화면에서 가져온다 — 그 셋은 화면에만 있다.
     """
     on_screen = [*match_screen(vocab, segments), *match_bar(vocab, bar)]
     found = [
@@ -363,7 +368,12 @@ def exercise_matches(
     for m in on_screen:  # 이름표 먼저, 같은 이름이 여러 구간에 뜨면 처음 구간
         timed.setdefault(m.name, m)
     return [
-        replace(m, start_sec=timed[m.name].start_sec, factors=timed[m.name].factors)
+        replace(
+            m,
+            start_sec=timed[m.name].start_sec,
+            end_sec=timed[m.name].end_sec,
+            factors=timed[m.name].factors,
+        )
         if m.name in timed
         else m
         for m in best.values()
@@ -476,12 +486,12 @@ def labels_frame(labels: list[VideoLabel]) -> pd.DataFrame:
                 "age_evidence": v.age_evidence,
                 "fitness_factors": ";".join(v.fitness_factors),
                 "factor_evidence": v.factor_evidence,
-                # 본운동만. 공통 준비·마무리는 따로 적는다 (docs/dev/AI-7 §3.10)
+                # 본운동만. 공통 준비·마무리는 따로 적는다 (docs/02)
                 "exercise_names": ";".join(m.name for m in v.exercises if not m.common),
                 "common_exercise_names": ";".join(m.name for m in v.exercises if m.common),
-                # 영상 단위로는 비운다 — 운동별 시각은 운동 이름 → 영상 표에 (docs/dev/AI-7 §4)
+                # 영상 단위로는 비운다 — 운동별 시각은 운동 이름 → 영상 표에 (docs/02)
                 "start_sec": "",
-                # 규칙이 없다 (docs/dev/AI-7 §3)
+                # 규칙이 없다 (docs/02)
                 "space": "",
                 "noise": "",
                 "equipment": "",
@@ -506,7 +516,7 @@ def watch_url(video_id: str, start_sec: int | None) -> str:
 
 
 def exercises_frame(labels: list[VideoLabel]) -> pd.DataFrame:
-    """운동 이름 → 영상 (docs/dev/AI-11 §4).
+    """운동 이름 → 영상 (docs/05).
 
     이름마다 **본운동 행을 공통 준비·마무리 행보다 먼저**, 그 안에서 믿을 만한 출처부터 적는다.
     """
@@ -521,6 +531,7 @@ def exercises_frame(labels: list[VideoLabel]) -> pd.DataFrame:
             "fitness_factors": ";".join(m.factors),
             "age_group": v.age_group or "",
             "start_sec": "" if m.start_sec is None else m.start_sec,
+            "end_sec": "" if m.end_sec is None else m.end_sec,
             "url": watch_url(v.video_id, m.start_sec),
         }
         for v in labels
@@ -533,7 +544,7 @@ def exercises_frame(labels: list[VideoLabel]) -> pd.DataFrame:
 
 
 def report(labels: list[VideoLabel], excluded: int, vocabulary_size: int) -> list[str]:
-    """라벨 공백 리포트 (docs/dev/AI-7 §4). 0 인 칸도 0 으로 적는다."""
+    """라벨 공백 리포트 (docs/02). 0 인 칸도 0 으로 적는다."""
     ages = Counter(v.age_group for v in labels)
     factors = Counter(f for v in labels for f in v.fitness_factors)
     lines = [f"영상 {len(labels):,} · 중장년 재생목록이라 뺀 것 {excluded}", "연령대"]
@@ -582,10 +593,10 @@ def main(argv: list[str] | None = None) -> int:
     labels, excluded = label_videos(videos, captions, vocab, screens)
 
     csv = {"index": False, "encoding": "utf-8-sig"}
-    labels_frame(labels).to_csv(interim / LABELS_FILE, **csv)
+    labels_frame(labels).to_csv(interim / LABELING_FILE, **csv)
     exercises_frame(labels).to_csv(interim / EXERCISES_FILE, **csv)
     print("\n".join(report(labels, excluded, len(vocab))))
-    print(f"→ {interim / LABELS_FILE} · {interim / EXERCISES_FILE}")
+    print(f"→ {interim / LABELING_FILE} · {interim / EXERCISES_FILE}")
     return 0
 
 

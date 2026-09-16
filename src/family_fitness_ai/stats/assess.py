@@ -65,7 +65,7 @@ class Reference:
         if missing:
             raise FileNotFoundError(f"산출물이 없다: {root} — {', '.join(missing)}")
 
-        # 문턱은 등급 판정이 쓴다 (docs/dev/AI-2 §1). 없으면 점수만 낸다.
+        # 문턱은 등급 판정이 쓴다 (docs/02). 없으면 점수만 낸다.
         criteria_path = root / CRITERIA_FILE
         self.thresholds: list[C.Threshold] = C.load(criteria_path) if criteria_path.exists() else []
         # 신체조성은 3등급 판정에만 쓴다. 응답에 수치로 나가지 않는다 (docs/02 §3).

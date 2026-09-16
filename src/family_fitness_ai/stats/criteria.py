@@ -24,7 +24,7 @@ _AGE_MAX = 120  # '85이상' 같은 열린 구간의 상한. 분포 산출에서
 
 @dataclass(frozen=True)
 class BodyRange:
-    """신체조성 기준. 문턱이 아니라 **구간**이라 별도 표로 둔다 (docs/dev/AI-2 §6).
+    """신체조성 기준. 문턱이 아니라 **구간**이라 별도 표로 둔다 (docs/02 §5.3).
 
     `lo` 이상 `hi` 미만이면 통과다. 한쪽만 있는 칸(`< 24.2`)은 다른 쪽이 `None` 이다.
     시트의 `초과`/`이상` 구분은 경계값 한 점의 차이라 구별하지 않는다.
@@ -145,7 +145,7 @@ def load_body_ranges_xlsx(xlsx_path: str | Path) -> list[BodyRange]:
     """기준표 원본에서 신체조성 구간을 읽는다. **3등급 행에만 있다.**
 
     시트에서 1·2등급 행의 BMI·체지방률 칸은 비어 있다 — 신체조성은 3등급 판정에만
-    쓰인다 (docs/dev/AI-2 §6). 병합 셀이라 값을 각 행에 채워 넣고 읽는다.
+    쓰인다 (docs/02 §5.3). 병합 셀이라 값을 각 행에 채워 넣고 읽는다.
     """
     wb = openpyxl.load_workbook(xlsx_path, data_only=True)
     out: list[BodyRange] = []

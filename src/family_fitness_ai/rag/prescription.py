@@ -1,4 +1,4 @@
-"""처방 어휘와 처방 청크 (docs/dev/AI-6).
+"""처방 어휘와 처방 청크 (docs/04).
 
 원문은 측정 데이터의 처방 컬럼이다. 한 행이 이렇게 생겼다:
 
@@ -35,8 +35,8 @@ PHASES = ("준비운동", "본운동", "정리운동")
 PHASE_SEPARATOR = " / "
 NAME_SEPARATOR = ","
 
-# 본문은 처방 누적 80% 를 덮을 때까지, 최대 30개 (docs/dev/AI-6 §5).
-# 30개면 400토큰 안에 든다 — `bge-m3` 토크나이저로 쟀다 (docs/dev/AI-8 §1.3).
+# 본문은 처방 누적 80% 를 덮을 때까지, 최대 30개 (docs/04).
+# 30개면 400토큰 안에 든다 — `bge-m3` 토크나이저로 쟀다 (docs/04 §2.2).
 COVERAGE = 0.8
 MAX_EXERCISES = 30
 
@@ -48,7 +48,7 @@ CHUNKS_FILE = "prescription_chunks.csv"
 
 
 def identity(name: str) -> str:
-    """운동명의 동일성 키. **표기 차이까지만 합친다** (docs/dev/AI-6 §4 ②).
+    """운동명의 동일성 키. **표기 차이까지만 합친다** (docs/04 ②).
 
     NFKC 뒤 공백·가운뎃점을 지운다. 그 이상은 합치지 않는다 — 비슷해 보이는 이름
     (`스트레칭`·`스트레칭2`, `I`·`II`, `전방`·`후방`)은 대부분 다른 운동이다.
@@ -81,7 +81,7 @@ class Term:
 
 
 def build_vocabulary(df: pd.DataFrame) -> list[Term]:
-    """운동명의 닫힌 집합. 대표 표기는 가장 많이 쓰인 원문이다 (docs/dev/AI-6 §4 ②)."""
+    """운동명의 닫힌 집합. 대표 표기는 가장 많이 쓰인 원문이다 (docs/04 ②)."""
     forms: dict[str, Counter[str]] = defaultdict(Counter)
     phases: dict[str, set[str]] = defaultdict(set)
     groups: dict[str, set[str]] = defaultdict(set)
@@ -122,7 +122,7 @@ class Chunk:
 
 
 def natural_key(age_group: str, age: int, sex: str, phase: str) -> str:
-    """**전부 구조로 정해진다.** 해시가 없다 (docs/dev/AI-6 §4 ①).
+    """**전부 구조로 정해진다.** 해시가 없다 (docs/04 ①).
 
     원자료가 쌓이면 빈도가 바뀌어 내용 해시도 바뀌지만, 구조 키는 같은 칸이면 같다
     — 저장된 인용이 끊기지 않는다 (docs/04 §5).
@@ -213,7 +213,7 @@ def vocabulary_frame(terms: list[Term]) -> pd.DataFrame:
                 "count": t.count,
                 "phases": ";".join(t.phases),
                 "age_groups": ";".join(t.age_groups),
-                "fitness_factors": "",  # 비워 둔다 (docs/dev/AI-6 §4 ③)
+                "fitness_factors": "",  # 비워 둔다 (docs/04 ③)
             }
             for t in terms
         ]

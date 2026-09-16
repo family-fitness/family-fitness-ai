@@ -77,7 +77,7 @@ PRESCRIPTION_COL = "MVM_PRSCRPTN_CN"
 
 # 만 120세 초과는 측정 오류다. 어르신 나이에 377·984·1081 같은 값이 있고, 실제
 # 최고령 103세와 그 사이가 통째로 비어 있어 경계를 어디에 두어도 결과가 같다
-# (docs/dev/AI-6 §6.2).
+# (docs/04).
 MAX_PLAUSIBLE_AGE = 120
 
 

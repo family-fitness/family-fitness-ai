@@ -27,7 +27,7 @@ from .score import Anchors, build_anchors, score
 
 # 기준표는 레포에 커밋되어 있다. 원자료 zip 에는 측정 기록만 담긴다 (docs/02 §3.1).
 DEFAULT_CRITERIA = Path("data/release/grade_thresholds.csv")
-# 신체조성은 문턱이 아니라 구간이라 표를 따로 둔다 (docs/dev/AI-2 §6).
+# 신체조성은 문턱이 아니라 구간이라 표를 따로 둔다 (docs/02 §5.3).
 BODY_RANGES_FILE = "body_composition_ranges.csv"
 
 
@@ -180,7 +180,7 @@ GRADE_ORDER = ("1등급", "2등급", "3등급", G.PARTICIPATED)
 
 # 공단은 2025-06 개편으로 3등급 아래를 4·5·6등급으로 쪼갰다. 우리는 그 셋을 내지
 # 않으므로 `참가` 로 접는다 — 셋 다 "3등급 미달"이라 뜻이 바뀌지 않고, 접으면
-# 개편 전후 데이터가 같은 눈금 위에 놓인다 (docs/dev/AI-2 §5.3).
+# 개편 전후 데이터가 같은 눈금 위에 놓인다 (docs/02).
 FOLDED_INTO_PARTICIPATED = ("4등급", "5등급", "6등급")
 
 
@@ -194,7 +194,7 @@ def build_grade_distribution(df: pd.DataFrame, thresholds: list[C.Threshold]) ->
 
     공단이 기록한 등급이 원자료에 이미 있다. 우리 판정으로 분포를 만들면 판정
     로직의 오차가 분포에 실리고, 사용자는 "내 등급"과 "또래 분포"를 같은 잣대로
-    읽지 못한다 (docs/dev/AI-2 §2).
+    읽지 못한다 (docs/02).
     """
     rows: list[dict] = []
     df = df.assign(**{M.GRADE_COL: fold_grades(df[M.GRADE_COL])})
@@ -204,7 +204,7 @@ def build_grade_distribution(df: pd.DataFrame, thresholds: list[C.Threshold]) ->
             for sex in ("M", "F"):
                 cell = band_df[band_df[M.SEX_COL] == sex]
                 # 등급이 비어 있는 행은 분모에서도 뺀다. 미판정을 참가로 세면
-                # 참가 비율이 부풀어 오른다 (docs/dev/AI-2 §4).
+                # 참가 비율이 부풀어 오른다 (docs/02).
                 graded = cell[cell[M.GRADE_COL].isin(GRADE_ORDER)]
                 total = int(len(graded))
                 if not total:
@@ -238,7 +238,7 @@ def concordance(
     """우리 판정과 공단 기록이 얼마나 같은가. **판정 로직의 검사다.**
 
     전수를 돌리면 오래 걸리므로 표본을 본다. 파일로 만들지 않는다 — 매번 달라지는
-    진단값이고 커밋할 산출물이 아니다 (docs/dev/AI-2 §4).
+    진단값이고 커밋할 산출물이 아니다 (docs/02).
     """
     graded = df.assign(**{M.GRADE_COL: fold_grades(df[M.GRADE_COL])})
     graded = graded[graded[M.GRADE_COL].isin(GRADE_ORDER)]
@@ -340,13 +340,13 @@ def main(argv: list[str] | None = None) -> int:
         print(f"  불일치 — 우리가 후한 쪽 {report['generous']:,} · 박한 쪽 {report['strict']:,}")
         # 기울기를 실측에서 읽는다. 어느 쪽으로 기우는지 미리 단정하지 않는다 —
         # 신체조성 누락은 후한 쪽으로, 결측을 판정 불가로 보는 규칙은 박한 쪽으로
-        # 작용해서 방향이 상쇄된다 (docs/dev/AI-2 §5).
+        # 작용해서 방향이 상쇄된다 (docs/02).
         lean = (
             "박한"
             if report["strict"] > report["generous"]
             else ("후한" if report["generous"] > report["strict"] else "양쪽 비슷한")
         )
-        print(f"  {lean} 쪽으로 기운다 — 사유는 docs/dev/AI-2 §5")
+        print(f"  {lean} 쪽으로 기운다 — 사유는 docs/02")
     return 0
 
 

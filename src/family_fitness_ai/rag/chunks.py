@@ -1,4 +1,4 @@
-"""코퍼스 청크를 한 파일로 모은다 (docs/dev/AI-8 §2 · docs/04 §1·§2).
+"""코퍼스 청크를 한 파일로 모은다 (docs/04 · docs/04 §1·§2).
 
 세 소스를 같은 열로 낸다.
 
@@ -11,7 +11,7 @@
 
 **연령이 빈 `prescription`·`video` 청크는 만들지 않는다** (docs/04 §2.2). 이 검사가
 `age_group IS NULL` 을 "연령 무관"으로 쓰는 것을 안전하게 만드는 짝이다. 빠뜨린 수는
-세어서 보고한다 — 조용히 거르면 코퍼스가 왜 작은지 알 수 없다 (docs/dev/AI-8 §3.1).
+세어서 보고한다 — 조용히 거르면 코퍼스가 왜 작은지 알 수 없다 (docs/04).
 
 실행 (labeling.label 뒤, 저장소 루트에서):
     python -m family_fitness_ai.rag.chunks
@@ -28,10 +28,13 @@ import pandas as pd
 
 from ..stats.items import ITEMS
 
+# **data/release 에 둔다.** 서비스가 런타임에 읽는 파일이고 (색인을 여기서 굽는다),
+# `data/interim` 은 `.gitignore` 의 `data/*` 에 걸려 커밋되지 않는다 — 새 클론에서
+# 색인을 다시 세울 수 없으면 `coach/messages` 를 배포할 수 없다 (docs/02 §4).
 CHUNKS_FILE = "chunks.csv"
 # AI-6 §5 · AI-7 §4 가 내는 파일
 PRESCRIPTION_FILE = "prescription_chunks.csv"
-VIDEO_LABELS_FILE = "video_labels.csv"
+VIDEO_LABELING_FILE = "video_labeling.csv"
 VIDEO_EXERCISES_FILE = "video_exercises.csv"
 VIDEOS_FILE = "videos.csv"
 # AI-2 가 커밋해 둔 기준표
@@ -197,7 +200,7 @@ def criteria_chunks(thresholds: pd.DataFrame) -> list[Row]:
 def build(interim: Path, release: Path) -> tuple[pd.DataFrame, dict[str, int]]:
     prescription, no_age_prescription = prescription_chunks(read_csv(interim / PRESCRIPTION_FILE))
     video, no_age_video = video_chunks(
-        read_csv(interim / VIDEO_LABELS_FILE),
+        read_csv(interim / VIDEO_LABELING_FILE),
         read_csv(interim / VIDEO_EXERCISES_FILE),
         read_csv(interim / VIDEOS_FILE),
     )
@@ -209,17 +212,17 @@ def build(interim: Path, release: Path) -> tuple[pd.DataFrame, dict[str, int]]:
 
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description="코퍼스 청크를 한 파일로 모은다")
-    ap.add_argument("--interim", default="data/interim", help="청크를 읽고 낼 곳")
-    ap.add_argument("--release", default="data/release", help="기준표가 있는 곳")
+    ap.add_argument("--interim", default="data/interim", help="재료 청크가 있는 곳")
+    ap.add_argument("--release", default="data/release", help="기준표가 있고 청크를 낼 곳")
     args = ap.parse_args(argv)
 
-    interim = Path(args.interim)
-    frame, skipped = build(interim, Path(args.release))
+    interim, release = Path(args.interim), Path(args.release)
+    frame, skipped = build(interim, release)
     # utf-8-sig — 검수하는 사람이 엑셀로 연다 (docs/02 §4)
-    frame.to_csv(interim / CHUNKS_FILE, index=False, encoding="utf-8-sig")
+    frame.to_csv(release / CHUNKS_FILE, index=False, encoding="utf-8-sig")
 
     lengths = frame["text"].str.len()
-    print(f"청크 {len(frame):,} → {interim / CHUNKS_FILE}")
+    print(f"청크 {len(frame):,} → {release / CHUNKS_FILE}")
     for source, count in frame["source"].value_counts().sort_index().items():
         print(f"  {source} {count}")
     print(f"본문 길이 중앙 {int(lengths.median())}자 · 최대 {lengths.max()}자")

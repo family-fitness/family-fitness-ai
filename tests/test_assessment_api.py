@@ -1,4 +1,4 @@
-"""`POST /v1/fitness/assessment` (docs/dev/AI-4 §5)."""
+"""`POST /v1/fitness/assessment` (docs/03)."""
 
 from __future__ import annotations
 
@@ -43,7 +43,7 @@ def test_child_scope_에_점수와_백분위와_체중이_없다(client: TestCli
 
 
 def test_측정값이_없으면_요인을_지목하지_않는다(client: TestClient) -> None:
-    """연령만으로 요인을 고르면 그 값에는 인용할 것이 없다 (docs/dev/AI-4 §3.1).
+    """연령만으로 요인을 고르면 그 값에는 인용할 것이 없다 (docs/03).
 
     빈 자리를 문구로 채우지 않는다 — `focus_one: null` 이면 호출자는 제안이 없음을
     안다. 제안은 코퍼스가 선 뒤(AI-8) 근거와 함께 붙는다.
@@ -90,7 +90,7 @@ def test_신장_체중만_있으면_L1_이다(client: TestClient) -> None:
 
 
 def test_그_구간의_기준항목이_아니면_L2_가_아니다(client: TestClient) -> None:
-    """`measurements` 가 왔다고 L2 가 아니다 (docs/dev/AI-4 §2)."""
+    """`measurements` 가 왔다고 L2 가 아니다 (docs/03)."""
     body = post(client, measurements={"041": 0.5})  # 성인 항목이다
     assert body["input_level"] == "L0"
     assert body["parent_scope"]["factors"] == []
@@ -132,14 +132,14 @@ def test_실측_예시가_그대로_나온다(client: TestClient) -> None:
 
 
 def test_부모_문구가_최고와_최저_요인을_고른다(client: TestClient) -> None:
-    """이 엔드포인트가 새로 하는 두 일 중 하나다 (docs/dev/AI-4 §3.3)."""
+    """이 엔드포인트가 새로 하는 두 일 중 하나다 (docs/03)."""
     copy = post(client, measurements=MEASURED)["parent_scope"]["copy"]
     assert copy["strength"] == "심폐지구력은 잘하고 있는 영역입니다"
     assert copy["focus"] == "순발력은 꾸준히 하고 있는 영역입니다"
 
 
 def test_요인이_하나면_같은_문장을_두_번_내지_않는다(client: TestClient) -> None:
-    """하나만 재고 두 가지를 말할 수는 없다 (docs/dev/AI-4 §3.3)."""
+    """하나만 재고 두 가지를 말할 수는 없다 (docs/03)."""
     copy = post(client, measurements={"028": 41.3})["parent_scope"]["copy"]
     assert copy["strength"] != copy["focus"]
     assert "근력" in copy["focus"]
@@ -254,7 +254,7 @@ def test_오류_응답이_보낸_값을_되돌려_보내지_않는다(client: Te
 
 
 def test_저표본_칸은_점수를_null_로_내린다(client: TestClient) -> None:
-    """`n < 30` 이면 ECDF를 믿지 않는다 (docs/02 §6 ③ · docs/dev/AI-4 §4).
+    """`n < 30` 이면 ECDF를 믿지 않는다 (docs/02 §6 ③ · docs/03).
 
     청소년 여 13세 `035` 는 n=24 다. 같은 응답의 다른 요인은 그대로 점수가 나온다 —
     칸 단위로 내리지 응답 전체를 버리지 않는다.

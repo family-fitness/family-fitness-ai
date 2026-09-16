@@ -1,9 +1,9 @@
-"""청크를 벡터로 바꿔 색인한다 (docs/dev/AI-8 §3 · docs/04 §5).
+"""청크를 벡터로 바꿔 색인한다 (docs/04 · docs/04 §5).
 
 **배치만 색인한다.** 온라인 요청을 처리하는 중에 코퍼스가 바뀌는 일은 없다
 (docs/01 §4.2).
 
-색인 전에 검사하고 **통과하지 못하면 색인하지 않는다** (docs/dev/AI-8 §3.1).
+색인 전에 검사하고 **통과하지 못하면 색인하지 않는다** (docs/04).
 빠뜨린 것은 세어서 보고한다 — 조용히 거르면 코퍼스가 왜 작은지 알 수 없다.
 
 실행 (rag.chunks 뒤, 임베딩 서버를 띄운 채):
@@ -21,7 +21,7 @@ from typing import Any
 import faiss
 import pandas as pd
 
-from ..common.settings import INDEX_DIR
+from ..common.settings import INDEX_DIR, RELEASE_DIR
 from . import chunks as K
 from .embed import Embedder, embedder_from_settings
 
@@ -99,11 +99,11 @@ def save(index: Any, frame: pd.DataFrame, manifest: dict, out_dir: Path) -> None
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description="청크를 벡터로 색인한다")
     ap.add_argument("--corpus-version", required=True, help="코퍼스를 다시 만든 판 (docs/04 §5)")
-    ap.add_argument("--interim", default="data/interim", help="chunks.csv 가 있는 곳")
+    ap.add_argument("--release", default=str(RELEASE_DIR), help="chunks.csv 가 있는 곳")
     ap.add_argument("--out", default=str(INDEX_DIR), help="색인을 낼 곳 (커밋하지 않는다)")
     args = ap.parse_args(argv)
 
-    frame = K.read_csv(Path(args.interim) / K.CHUNKS_FILE)
+    frame = K.read_csv(Path(args.release) / K.CHUNKS_FILE)
     try:
         index, manifest = build(frame, embedder_from_settings(), args.corpus_version)
     except IndexRefused as e:

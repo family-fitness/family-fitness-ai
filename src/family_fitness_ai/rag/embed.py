@@ -1,4 +1,4 @@
-"""청크와 질의를 벡터로 바꾼다 (docs/dev/AI-8 §1.3).
+"""청크와 질의를 벡터로 바꾼다 (docs/04 §2.2).
 
 `bge-m3` · **1024차원**. 로컬 `llama serve --embedding` 의 OpenAI 호환
 `/v1/embeddings` 를 부른다 — 외부 호출도 키도 없다.
@@ -81,7 +81,14 @@ class LlamaEmbedder:
             body = {"input": list(texts[start : start + self.batch]), "model": self.model}
             out = self.post(f"{self.url.rstrip('/')}/v1/embeddings", json.dumps(body).encode())
             # 서버가 순서를 바꿔 돌려줄 수 있다. `index` 로 되돌린다.
-            rows += [item["embedding"] for item in sorted(out["data"], key=lambda d: d["index"])]
+            returned = [item["embedding"] for item in sorted(out["data"], key=lambda d: d["index"])]
+            # 묶음마다 센다. 전체 개수만 보면 한 묶음이 모자라고 다른 묶음이 남을 때
+            # 합이 맞아 버려, 청크와 벡터가 한 칸씩 밀린 채로 색인된다.
+            if len(returned) != len(body["input"]):
+                raise EmbeddingFailed(
+                    f"{start}번째 묶음에 {len(returned)}개가 왔다 — {len(body['input'])}개여야 한다"
+                )
+            rows += returned
         vectors = np.asarray(rows, dtype="float32")
         if vectors.shape != (len(texts), self.dim):
             raise EmbeddingFailed(f"{vectors.shape} — {len(texts)}×{self.dim} 이어야 한다")

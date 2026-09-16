@@ -8,6 +8,7 @@ dependencies = [
   "anthropic>=1.0",
   "faiss-cpu>=1.13",
   "fastapi>=0.115",
+  "google-genai>=2.0",
   "numpy>=1.26",
   "ocrmac>=1.0; sys_platform == 'darwin'",
   "openpyxl>=3.1",

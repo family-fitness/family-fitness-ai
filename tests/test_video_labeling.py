@@ -1,4 +1,4 @@
-"""영상 수집과 라벨 규칙 (docs/dev/AI-7 §3).
+"""영상 수집과 라벨 규칙 (docs/02).
 
 네트워크 없이 돈다 — CI 에는 키가 없다. 제목·설명문은 공단 영상의 실제 모양을 본뜬다.
 """
@@ -96,7 +96,7 @@ def test_자막이_없는_사유를_남긴다() -> None:
 
 
 def test_막히면_새로_묻기를_멈추고_막힌_영상은_캐시하지_않는다(tmp_path: Path) -> None:
-    """다시 돌리면 끊긴 곳부터 받는다 (docs/dev/AI-7 §2). 캐시에 있던 것은 그대로 싣는다."""
+    """다시 돌리면 끊긴 곳부터 받는다 (docs/02). 캐시에 있던 것은 그대로 싣는다."""
 
     class Snippet:
         start, text = 0.0, "거북이 스트레칭"
@@ -147,7 +147,7 @@ def test_태그와_설명문의_연령은_옮기지_않는다() -> None:
 
 
 def test_제목에_적힌_연령이_재생목록보다_앞선다() -> None:
-    """「청소년」 재생목록에 `[유소년]` 영상이 섞여 있다 (docs/dev/AI-7 §3)."""
+    """「청소년」 재생목록에 `[유소년]` 영상이 섞여 있다 (docs/02)."""
     youth = ("PLBdpvOnWjVZl_rR4d70BQB8nens2vpbhk", "🎯 연령별 맞춤 운동 : 청소년")
     title = "[👦🏻유소년] 성장기 학생들을 위한 근력 운동 프로그램 (30min)"
     label = label_one(title=title, **in_playlists(youth))
@@ -170,7 +170,7 @@ def test_재생목록의_청년은_성인이다() -> None:
 
 
 def test_중장년_재생목록은_라벨하지_않는다() -> None:
-    """서비스 대상이 아니다 (docs/dev/AI-7 §3.5)."""
+    """서비스 대상이 아니다 (docs/02)."""
     labels, excluded = L.label_videos(
         videos(
             {"video_id": "a", **in_playlists(INFANTS)},
@@ -207,7 +207,7 @@ def test_설명문의_요인_해시태그는_보지_않는다() -> None:
 
 
 def test_설명문의_해시태그는_운동명으로_읽지_않는다() -> None:
-    """`#흔들어체조` 가 영유아 재생목록 설명문 대부분에 있다 (docs/dev/AI-7 §3.2)."""
+    """`#흔들어체조` 가 영유아 재생목록 설명문 대부분에 있다 (docs/02)."""
     label = label_one(
         title="꽃게처럼 걸어요", description="#국민체력100 #헤이지니#유아운동 #흔들어체조"
     )
@@ -246,6 +246,12 @@ def test_어휘_밖_이름은_만들지_않는다() -> None:
 
 
 # ── 산출 ────────────────────────────────────────────────────────────
+
+
+def test_라벨링_중간_산출물의_이름은_백엔드_적재_형식과_겹치지_않는다() -> None:
+    """한 이름을 둘이 쓰려 했다 (ReBuild.md §1.2 ④). 라벨링 중간 산출물이 비켰다."""
+    assert L.LABELING_FILE == "video_labeling.csv"
+    assert L.EXERCISE_COLUMNS[L.EXERCISE_COLUMNS.index("start_sec") + 1] == "end_sec"
 
 
 def test_운동_이름_표는_믿을_만한_출처부터_적는다() -> None:
@@ -341,37 +347,42 @@ def test_기본운동기술은_요인이_아니다() -> None:
     assert segment.factors == ()
 
 
-def test_화면_이름표는_시작_시각과_요인을_싣는다() -> None:
+def test_화면_이름표는_시작_시각과_끝_시각과_요인을_싣는다() -> None:
+    """끝 시각은 **이름표가 사라진 때**다. 구간의 끝은 다음 운동의 시작으로 재므로
+    여기서 닫지 않는다 — 그 계산은 mission/segments.py 가 한다 (docs/05 §3.2)."""
     screen = {"frames": [frame(t, HEADER, "공받고 던져요") for t in (700, 702, 704)]}
     labels, _ = L.label_videos(
         videos({"video_id": "v1", "title": "응용운동"}), {}, VOCAB, {"v1": screen}
     )
     (match,) = labels[0].exercises
     assert match == L.Match(
-        "공 받고 던져요", "screen", "11:40 공받고 던져요", 700, ("민첩성", "순발력", "협응력")
+        "공 받고 던져요", "screen", "11:40 공받고 던져요", 700, 704, ("민첩성", "순발력", "협응력")
     )
     row = L.exercises_frame(labels).iloc[0]
-    assert (row["start_sec"], row["fitness_factors"]) == (700, "민첩성;순발력;협응력")
+    assert (row["start_sec"], row["end_sec"]) == (700, 704)
+    assert row["fitness_factors"] == "민첩성;순발력;협응력"
     assert row["url"] == "https://www.youtube.com/watch?v=v1&t=700s"  # 그 운동부터 재생된다
     assert labels[0].screen == "1"
 
 
-def test_시각이_없으면_영상_처음부터_재생되는_주소다() -> None:
+def test_시각이_없으면_두_칸을_비우고_영상_처음부터_재생되는_주소다() -> None:
+    """화면을 안 읽은 영상은 시각이 없다. 지어내지 않고 비운다 (AGENTS.md §4)."""
     labels, _ = L.label_videos(
         videos({"video_id": "v1", "title": "EP03.거북이 스트레칭"}), {}, VOCAB
     )
     row = L.exercises_frame(labels).iloc[0]
-    assert (row["start_sec"], row["url"]) == ("", "https://www.youtube.com/watch?v=v1")
+    assert (row["start_sec"], row["end_sec"]) == ("", "")
+    assert row["url"] == "https://www.youtube.com/watch?v=v1"
 
 
 def test_제목에서_잡힌_이름도_시각은_화면에서_가져온다() -> None:
-    """제목이 더 믿을 만해도 시각은 화면에만 있다 (docs/dev/AI-7 §3.4)."""
+    """제목이 더 믿을 만해도 시각은 화면에만 있다 (docs/02)."""
     screen = {"frames": [frame(t, "거북이 스트레칭") for t in (30, 32)]}
     labels, _ = L.label_videos(
         videos({"video_id": "v1", "title": "EP03.거북이 스트레칭"}), {}, VOCAB, {"v1": screen}
     )
     (match,) = labels[0].exercises
-    assert (match.source, match.start_sec) == ("title", 30)
+    assert (match.source, match.start_sec, match.end_sec) == ("title", 30, 32)
 
 
 def test_영상_요인은_제목과_화면을_합친다() -> None:
@@ -445,5 +456,8 @@ def test_이름_막대는_시각을_싣고_이름표보다_뒤에_믿는다() ->
     labels, _ = L.label_videos(
         videos({"video_id": "v1", "title": "운동"}), {}, VOCAB, {"v1": {"frames": frames}}
     )
-    got = {m.name: (m.source, m.start_sec) for m in labels[0].exercises}
-    assert got == {"거북이 스트레칭": ("screen", 40), "공 받고 던져요": ("screen_bar", 90)}
+    got = {m.name: (m.source, m.start_sec, m.end_sec) for m in labels[0].exercises}
+    assert got == {
+        "거북이 스트레칭": ("screen", 40, 42),
+        "공 받고 던져요": ("screen_bar", 90, 92),
+    }

@@ -1,4 +1,4 @@
-"""화면에 나가는 문구 (docs/dev/AI-4 §3.3).
+"""화면에 나가는 문구 (docs/03).
 
 **문구는 규칙으로 만든다. LLM이 아니다.** `docs/01` §3.1 이 LLM 호출을 `compose`
 한 곳으로 묶었고, `assessment` 는 그 그래프를 타지 않는다.
@@ -40,7 +40,7 @@ NO_MEASUREMENT_PARENT: dict[str, str] = {
 }
 
 # 점수가 난 요인이 하나뿐이라 `strength` 와 `focus` 가 같은 요인을 가리킬 때.
-# 하나만 재고 두 가지를 말할 수는 없다 (docs/dev/AI-4 §3.3).
+# 하나만 재고 두 가지를 말할 수는 없다 (docs/03).
 SINGLE_FACTOR_STRENGTH = "측정된 요인이 하나여서 견줄 영역이 아직 없습니다"
 
 

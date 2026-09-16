@@ -1,4 +1,4 @@
-"""공단 유튜브 채널의 영상 메타데이터와 자막을 모은다 (docs/dev/AI-7 §2).
+"""공단 유튜브 채널의 영상 메타데이터와 자막을 모은다 (docs/02).
 
 API 는 `channels.list` → `playlists.list` → `playlistItems.list` → `videos.list` 만
 쓴다. `search.list` 는 일일 100회 제한이다 (docs/02 §3.2).

@@ -1,4 +1,4 @@
-"""FastAPI 앱 (docs/dev/AI-3).
+"""FastAPI 앱 (docs/01).
 
 `/healthz`·`/readyz` 와 `/v1/fitness/assessment` 를 낸다. 나머지 `/v1` 은 그 갈래에서
 붙는다 — 골격이라고 해서 "나중에 쓸 것"을 미리 넣지 않는다 (docs/03 §12).
@@ -19,10 +19,11 @@ from fastapi.responses import JSONResponse
 from ..common import logging as reqlog
 from ..common.errors import ApiError, ErrorCode
 from ..common.settings import get_settings
-from . import fitness, readiness
+from . import coach, fitness, readiness
 
 app = FastAPI(title="family-fitness-ai", version="0.1.0", docs_url="/docs")
 app.include_router(fitness.router)
+app.include_router(coach.router)
 
 
 @app.middleware("http")

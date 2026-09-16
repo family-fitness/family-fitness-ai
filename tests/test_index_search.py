@@ -1,7 +1,7 @@
-"""색인 전 검사와 연령 필터 검색 (docs/dev/AI-8 §3·§4 · docs/04 §3).
+"""색인 전 검사와 연령 필터 검색 (docs/04 · docs/04 §3).
 
 임베딩 서버 없이 돈다 — 벡터를 직접 만든다. 모델이 무엇을 가깝다고 보는지는 여기서
-재지 않는다. 그것은 `SIM_THRESHOLD` 측정이 잰다 (docs/dev/AI-8 §5).
+재지 않는다. 그것은 `SIM_THRESHOLD` 측정이 잰다 (docs/05 §4.2).
 """
 
 from __future__ import annotations
@@ -134,3 +134,72 @@ def test_컨텍스트는_최대_다섯_청크다() -> None:
         np.ones(8, dtype="float32") / np.sqrt(8), ["유아기"], threshold=0.0
     )
     assert len(result.hits) == S.MAX_CONTEXT
+
+
+def test_연령_필터는_후보를_고르는_단계에_있다() -> None:
+    """후처리로 거르면 이 시험이 깨진다 (docs/04 §3).
+
+    성인 청크가 상위를 다 차지하도록 만들어 두고 유아기로 찾는다. 뒤에서 걸러내는
+    구현이라면 1차 top-k 가 성인으로만 차서 결과가 비지만, 후보 단계에서 걸러내면
+    아이 청크가 그 자리를 채운다.
+    """
+    frame = chunks(
+        *[(f"prescription:adult{i}", "prescription", "성인") for i in range(S.TOP_K)],
+        ("video:kid", "video", "유아기"),
+    )
+    index, manifest = I.build(frame, FakeEmbedder(dim=S.TOP_K + 1), "2026-09-16.1")
+    kid_vector = np.zeros(S.TOP_K + 1, dtype="float32")
+    kid_vector[S.TOP_K % (S.TOP_K + 1)] = 1.0
+
+    result = S.Corpus(index, frame, manifest).search(kid_vector, ["유아기"], threshold=0.5)
+    assert [h.chunk_id for h in result.hits] == ["video:kid"]
+
+
+def test_연령으로_빠진_수는_같은_창에서_센다() -> None:
+    """`filtered_out` 두 값의 분모가 같아야 나란히 읽힌다 (docs/03 §4.2).
+
+    코퍼스 전체의 성인 청크 수를 세면 질의와 무관한 상수가 나온다.
+    """
+    adults = S.TOP_K + 5
+    frame = chunks(
+        *[(f"prescription:adult{i}", "prescription", "성인") for i in range(adults)],
+        ("video:kid", "video", "유아기"),
+    )
+    dim = adults + 1
+    index, manifest = I.build(frame, FakeEmbedder(dim=dim), "2026-09-16.1")
+    # 앞 TOP_K 개 성인 청크 쪽으로 기울인 질의 — 연령 필터가 없으면 top-k 를 그들이 채운다
+    vector = np.zeros(dim, dtype="float32")
+    vector[: S.TOP_K] = 1.0
+    vector /= np.linalg.norm(vector)
+
+    result = S.Corpus(index, frame, manifest).search(vector, ["유아기"], threshold=0.0)
+    # 상수(성인 청크 15개)가 아니라 top-k 창에서 빠진 수여야 한다
+    assert result.filtered_out["age_group"] == S.TOP_K
+
+
+def test_연령대를_문자열_하나로_넘기면_막는다() -> None:
+    """`"유아기"` 는 글자 단위로 훑여 아무것도 맞지 않는다 — 조용히 비면 안 된다."""
+    with pytest.raises(ValueError, match="목록"):
+        corpus().search(np.zeros(DIM, dtype="float32"), "유아기", threshold=0.5)  # type: ignore[arg-type]
+
+
+def test_모르는_연령대는_막는다() -> None:
+    with pytest.raises(ValueError, match="모르는 연령대"):
+        corpus().search(np.zeros(DIM, dtype="float32"), ["중장년"], threshold=0.5)
+
+
+def test_색인과_메타가_어긋나면_읽지_않는다(tmp_path) -> None:  # type: ignore[no-untyped-def]
+    """행 번호가 벡터 번호다 — 어긋난 채로 돌면 엉뚱한 청크를 인용한다."""
+    frame = chunks(("video:v1", "video", "유아기"), ("criteria:c", "criteria", ""))
+    index, manifest = I.build(frame, FakeEmbedder(), "2026-09-16.1")
+    I.save(index, frame, manifest, tmp_path)
+    (tmp_path / I.META_FILE).write_text(frame.head(1).to_csv(index=False), encoding="utf-8-sig")
+    with pytest.raises(S.CorpusMismatch):
+        S.Corpus.load(tmp_path)
+
+
+def test_다른_임베딩_판으로_만든_색인을_짚는다() -> None:
+    """모델을 바꾸면 전량 재색인이다 (docs/04 §2.2). 그냥 돌면 점수가 뜻을 잃는다."""
+    with pytest.raises(S.CorpusMismatch, match="embed:fake/4"):
+        corpus().expects("embed:bge-m3/1024")
+    corpus().expects("embed:fake/4")

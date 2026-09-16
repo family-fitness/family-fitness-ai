@@ -1,7 +1,7 @@
 """`POST /v1/fitness/assessment` 의 요청·응답 (docs/03 §3).
 
 **검증은 요청 모델에 있다.** 라우터 안에서 검사하면 엔드포인트마다 빠뜨린다
-(docs/dev/AI-3 §2.3).
+(docs/01).
 """
 
 from __future__ import annotations

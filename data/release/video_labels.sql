@@ -1,0 +1,36 @@
+-- family-fitness-ai 가 낸 것이다. 손으로 고치지 말고 다시 내라:
+--   python -m family_fitness_ai.mission.loadout
+-- intensity·space·noise·equipment 는 잰 값이 없어 NULL 이다 (더미를 넣지 않는다).
+INSERT INTO exercise_videos (video_id, title, url, duration_sec, age_from, age_to, factors, intensity, space, noise, equipment, labeled_by, label_model)
+VALUES
+  ('-EATykJOvBQ', '🐢헤이지니와 함께 유아기 체력 쑥쑥 운동 | EP03.거북이 스트레칭', 'https://www.youtube.com/watch?v=-EATykJOvBQ', 79, 0, 6, '', NULL, NULL, NULL, NULL, 'batch', 'labeler:rules/v3'),
+  ('5Crvk_HZPy8', '🦖유아기 체력 향상 (복합운동) | EP03.알록달록 붙여요! (20miin)', 'https://www.youtube.com/watch?v=5Crvk_HZPy8', 1408, 0, 6, '', NULL, NULL, NULL, NULL, 'batch', 'labeler:rules/v3'),
+  ('9ejhpZjgtUA', '🦖유아기 복합 지각능력  향상 활동 | EP01. 알맞게 놓아요! (25min)', 'https://www.youtube.com/watch?v=9ejhpZjgtUA', 1674, 0, 6, '', NULL, NULL, NULL, NULL, 'batch', 'labeler:rules/v3'),
+  ('AN7gNF5QT1w', '🦖유아기 체력 향상 (복합운동) | EP02.불이야~!!! 소방훈련해요! (25miin)', 'https://www.youtube.com/watch?v=AN7gNF5QT1w', 1643, 0, 6, '', NULL, NULL, NULL, NULL, 'batch', 'labeler:rules/v3'),
+  ('Eg3GpTv7z8s', '[👦🏻유소년] 성장기 학생들을 위한 근력 운동 프로그램 (30min)', 'https://www.youtube.com/watch?v=Eg3GpTv7z8s', 1889, 7, 12, '근력', NULL, NULL, NULL, NULL, 'batch', 'labeler:rules/v3'),
+  ('F983gS5mwJg', '🦖유아기 복합 지각능력  향상 활동 | EP02. 알록달록 길을 걸어요! (25min)', 'https://www.youtube.com/watch?v=F983gS5mwJg', 1509, 0, 6, '', NULL, NULL, NULL, NULL, 'batch', 'labeler:rules/v3'),
+  ('GkoUyt8uIXA', '🦖유아기 복합 지각능력  향상 활동 | EP03. 끝까지 굴려요! 구릉구릉~~', 'https://www.youtube.com/watch?v=GkoUyt8uIXA', 1330, 0, 6, '', NULL, NULL, NULL, NULL, 'batch', 'labeler:rules/v3'),
+  ('HYl0oA1Ptyw', '[👩🏻‍🎓청소년] 중고등학생 체력향상 운동프로그램 (30min)', 'https://www.youtube.com/watch?v=HYl0oA1Ptyw', 2415, 13, 18, '', NULL, NULL, NULL, NULL, 'batch', 'labeler:rules/v3'),
+  ('IdpXx2gm90o', '초등학생의 기초체력향상과 운동능력발달을 위한 운동! 같이해봐요! #국민체력100 #유소년 #어린이운동', 'https://www.youtube.com/watch?v=IdpXx2gm90o', 739, 7, 12, '', NULL, NULL, NULL, NULL, 'batch', 'labeler:rules/v3'),
+  ('IfV5H7USgaA', '🦖유아기 기초체력 향상 체조 | 대근육 발달 근력/근지구력 운동 (8min)', 'https://www.youtube.com/watch?v=IfV5H7USgaA', 539, 0, 6, '근력,근지구력,협응력', NULL, NULL, NULL, NULL, 'batch', 'labeler:rules/v3'),
+  ('OpnELu5j4nk', '🦖유아기 기초체력 향상 체조 | 성장기 말랑말랑 유연성 발달 운동 (10min)', 'https://www.youtube.com/watch?v=OpnELu5j4nk', 727, 0, 6, '심폐지구력,유연성,협응력', NULL, NULL, NULL, NULL, 'batch', 'labeler:rules/v3'),
+  ('OxtY_hEQzIM', '🦖유아기 기초체력 향상 체조 | 대근육 발달 근력/근지구력 운동 응용동작 (7min)', 'https://www.youtube.com/watch?v=OxtY_hEQzIM', 461, 0, 6, '근력,근지구력', NULL, NULL, NULL, NULL, 'batch', 'labeler:rules/v3'),
+  ('P6UZsc2YqEM', '🦖유아기 기초체력 향상 체조 | 소근육 발달 협응성 향상 운동 응용동작 (5min)', 'https://www.youtube.com/watch?v=P6UZsc2YqEM', 313, 0, 6, '근력,근지구력,협응력', NULL, NULL, NULL, NULL, 'batch', 'labeler:rules/v3'),
+  ('RBKylbKM78k', '🦖유아기 체력 향상 (복합운동) | EP04. 점핑점핑 해요! (25miin)', 'https://www.youtube.com/watch?v=RBKylbKM78k', 1515, 0, 6, '', NULL, NULL, NULL, NULL, 'batch', 'labeler:rules/v3'),
+  ('Rt3tdifHbns', '🦖유아기 복합 운동기술 향상 | 수박나라로 떠나요! (심화편)', 'https://www.youtube.com/watch?v=Rt3tdifHbns', 1668, 0, 6, '', NULL, NULL, NULL, NULL, 'batch', 'labeler:rules/v3'),
+  ('SZefn91w66o', '🦖유아기 기초체력 향상 체조 | 심폐체력 유연성 운동 응용동작 (7min)', 'https://www.youtube.com/watch?v=SZefn91w66o', 453, 0, 6, '심폐지구력,근지구력,유연성,민첩성,순발력,협응력', NULL, NULL, NULL, NULL, 'batch', 'labeler:rules/v3'),
+  ('TXE6Y_FpayU', '[초등학생] ''키 쑥쑥'' 아이 성장 발달을 위한 스트레칭 운동', 'https://www.youtube.com/watch?v=TXE6Y_FpayU', 1108, 13, 18, '', NULL, NULL, NULL, NULL, 'batch', 'labeler:rules/v3'),
+  ('TmVZ2gdZnQQ', '[👦🏻유소년] 성장기 학생들을 위한 운동체력향상 운동프로그램 (30min)', 'https://www.youtube.com/watch?v=TmVZ2gdZnQQ', 1675, 7, 12, '', NULL, NULL, NULL, NULL, 'batch', 'labeler:rules/v3'),
+  ('V9cymtUC61I', '[청소년] 🎯이제는 정신력 싸움🎯 운동으로 멘탈 관리하고 대학가자!!', 'https://www.youtube.com/watch?v=V9cymtUC61I', 983, 13, 18, '', NULL, NULL, NULL, NULL, 'batch', 'labeler:rules/v3'),
+  ('XSn6DE3cxy4', '[👩🏻‍🎓청소년] 중고등학생 체중조절 다이어트 운동프로그램 (30min)', 'https://www.youtube.com/watch?v=XSn6DE3cxy4', 1998, 13, 18, '', NULL, NULL, NULL, NULL, 'batch', 'labeler:rules/v3'),
+  ('_hdna4_9GYc', '🦖유아기 복합 운동기술 향상 | 체력왕이 되어요 (심화편)', 'https://www.youtube.com/watch?v=_hdna4_9GYc', 1539, 0, 6, '', NULL, NULL, NULL, NULL, 'batch', 'labeler:rules/v3'),
+  ('gOrg8Lva-8A', '[유아기] 우리 아이 친밀감 UP! 건강 UP! 애착형성 필수 운동', 'https://www.youtube.com/watch?v=gOrg8Lva-8A', 885, 0, 6, '', NULL, NULL, NULL, NULL, 'batch', 'labeler:rules/v3'),
+  ('oCAjIRASiVI', '🦖유아기 운동체력 향상 | 민첩성 순발력 평형성 협응력 키우기 응용운동 (15min)', 'https://www.youtube.com/watch?v=oCAjIRASiVI', 1023, 0, 6, '심폐지구력,근지구력,민첩성,순발력,협응력,평형성', NULL, NULL, NULL, NULL, 'batch', 'labeler:rules/v3'),
+  ('oX1HKGUBO5w', '🦖유아기 체력 향상 (복합운동) | EP01.동물처럼 걸어요 (20min)', 'https://www.youtube.com/watch?v=oX1HKGUBO5w', 1650, 0, 6, '', NULL, NULL, NULL, NULL, 'batch', 'labeler:rules/v3'),
+  ('p12bb2zMebw', '[👦🏻유소년] 성장기 학생들을 위한 체력향상 운동프로그램 (30min)', 'https://www.youtube.com/watch?v=p12bb2zMebw', 2197, 7, 12, '', NULL, NULL, NULL, NULL, 'batch', 'labeler:rules/v3'),
+  ('qL76XIxD4Ds', '🦖유아기 기본 운동기술 향상 | 균형있는 근육 발달을 위한 이동성 운동 (기초편)', 'https://www.youtube.com/watch?v=qL76XIxD4Ds', 658, 0, 6, '', NULL, NULL, NULL, NULL, 'batch', 'labeler:rules/v3'),
+  ('qk0hXbltmIQ', '🦖유아기 복합 운동기술 향상 | 꽃게처럼 걸어요 (심화편)', 'https://www.youtube.com/watch?v=qk0hXbltmIQ', 1575, 0, 6, '', NULL, NULL, NULL, NULL, 'batch', 'labeler:rules/v3'),
+  ('shroLEVYDRM', '🐢헤이지니와 함께 유아기 체력 쑥쑥 운동 | EP04.우리 모두 다같이!', 'https://www.youtube.com/watch?v=shroLEVYDRM', 82, 0, 6, '', NULL, NULL, NULL, NULL, 'batch', 'labeler:rules/v3'),
+  ('xrCKWvZxF5g', '🦖헤이지니와 함께 유아기 체력 쑥쑥 운동 | EP01.인사체조', 'https://www.youtube.com/watch?v=xrCKWvZxF5g', 71, 0, 6, '', NULL, NULL, NULL, NULL, 'batch', 'labeler:rules/v3'),
+  ('ybVg6kewp90', '🦖헤이지니와 함께 유아기 체력 쑥쑥 운동 | EP02.흔들어 체조', 'https://www.youtube.com/watch?v=ybVg6kewp90', 84, 0, 6, '', NULL, NULL, NULL, NULL, 'batch', 'labeler:rules/v3')
+ON CONFLICT (video_id) DO UPDATE SET title = EXCLUDED.title, url = EXCLUDED.url, duration_sec = EXCLUDED.duration_sec, age_from = EXCLUDED.age_from, age_to = EXCLUDED.age_to, factors = EXCLUDED.factors, intensity = EXCLUDED.intensity, space = EXCLUDED.space, noise = EXCLUDED.noise, equipment = EXCLUDED.equipment, labeled_by = EXCLUDED.labeled_by, label_model = EXCLUDED.label_model;
