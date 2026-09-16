@@ -50,8 +50,10 @@ from .build import Mission as MissionRow
 from .cells import Cell, CellMatch, find_cells
 from .select import Candidate, from_missions, select
 
-# docs/03 §5.1 · 백엔드 `CoachRoles`. `응원` 은 편성에서 빠지고 참여자에도 넣지 않는다
-# (`LabelBasedProposalPlanner` 가 `role != CHEER` 로 거른다).
+# 역할 값의 정본이다. **`common/types.py` 에 두지 않는다** — 와이어의 `role` 은
+# 일부러 `str` 로 열어 두므로(모르는 값이 와도 422 를 내지 않는다) 계약 타입이 아니고,
+# 이 세 값이 필요한 곳은 편성뿐이다. `응원` 은 편성에서 빠지고 참여자에도 넣지 않는다
+# (백엔드도 `role != CHEER` 로 거른다).
 DRIVER = "주행자"
 COMPANION = "동반자"
 CHEER = "응원"
