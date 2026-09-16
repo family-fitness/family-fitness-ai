@@ -21,7 +21,9 @@ VectorBackend = Literal["pgvector", "faiss"]
 LabelerBackend = Literal["llama", "claude"]
 
 # 기본값이 있어 "설정했는가"가 뜻이 없는 이름. `configured()` 에 싣지 않는다.
-_NOT_REPORTED = frozenset({"vector_backend", "labeler_backend", "llama_server_url"})
+_NOT_REPORTED = frozenset(
+    {"vector_backend", "labeler_backend", "llama_server_url", "embedding_url"}
+)
 
 
 class Settings(BaseSettings):
@@ -42,11 +44,14 @@ class Settings(BaseSettings):
     mlflow_tracking_uri: str | None = None
     # docs/01 §1 — DB가 서기 전에도 개발이 멈추지 않게 한다. 배포 기본값은 pgvector 다.
     vector_backend: VectorBackend = "faiss"
-    # docs/04 §3 — 근거 없는 임계값은 조용히 관련 자료를 버린다. 기본값을 두지 않는다.
+    # docs/04 §3 — 잰 값은 0.50 (docs/dev/AI-8 §5). 여기에 기본값을 두지 않는 이유는,
+    # 임베딩 모델을 바꾸고도 다시 재지 않은 채 서비스가 뜨는 길을 막기 위해서다.
     sim_threshold: float | None = Field(default=None, ge=0.0, le=1.0)
     # docs/dev/AI-7 §3.8 — 영상 라벨 LLM. 기본은 외부 호출이 없는 로컬이다 (AGENTS.md §3).
     labeler_backend: LabelerBackend = "llama"
     llama_server_url: str = "http://127.0.0.1:8081"
+    # docs/dev/AI-8 §1.3 — 청크·질의 임베딩 (`bge-m3` · 1024). 색인과 검색이 같은 것을 쓴다.
+    embedding_url: str = "http://127.0.0.1:8082"
     # 비우면 백엔드의 기본 모델이다.
     labeler_model: str | None = None
 

@@ -1,0 +1,37 @@
+query_id,query,age_group,kind,expected_chunk_ids
+q01,다섯 살 아이 집에서 할 수 있는 운동 추천해줘,유아기,처방,prescription:유아기-60-M-본운동;prescription:유아기-60-F-본운동
+q02,5세 아이 준비운동은 뭐부터 해요?,유아기,처방,prescription:유아기-60-F-준비운동;prescription:유아기-60-M-준비운동
+q03,유아기 아이 마무리 스트레칭 알려줘,유아기,처방,prescription:유아기-60-F-정리운동;prescription:유아기-60-M-정리운동
+q04,여섯 살 아이 유연성 기르는 영상 있어?,유아기,영상,video:OpnELu5j4nk
+q05,유아기 균형 잡는 운동 영상 보여줘,유아기,영상,video:oCAjIRASiVI
+q06,아이랑 같이 하는 체조 영상,유아기,영상,video:ybVg6kewp90
+q07,유아기 앉아윗몸앞으로굽히기 1등급 기준이 몇이야?,유아기,기준,criteria:012-유아기-F;criteria:012-유아기-M
+q08,유아기 윗몸말아올리기 기준 알려줘,유아기,기준,criteria:009-유아기-F;criteria:009-유아기-M
+q09,네 살 아이 운동 뭐가 좋아요?,유아기,처방,prescription:유아기-48-F-본운동;prescription:유아기-48-M-본운동
+q10,초등 고학년 아이 근력 운동 뭐 시키면 좋아요?,유소년,처방,prescription:유소년-11-M-본운동;prescription:유소년-12-M-본운동
+q11,11살 여자아이 정리운동 알려줘,유소년,처방,prescription:유소년-11-F-정리운동
+q12,유소년 윗몸말아올리기 1등급 몇 개야?,유소년,기준,criteria:009-유소년-F;criteria:009-유소년-M
+q13,12살 아이 준비운동,유소년,처방,prescription:유소년-12-F-준비운동;prescription:유소년-12-M-준비운동
+q14,유소년 앉아윗몸앞으로굽히기 기준,유소년,기준,criteria:012-유소년-F;criteria:012-유소년-M
+q15,중학생 체력 좋아지는 운동 추천해줘,청소년,처방,prescription:청소년-14-M-본운동;prescription:청소년-14-F-본운동
+q16,고등학생 체중 관리 운동 영상,청소년,영상,video:XSn6DE3cxy4
+q17,중고등학생 바른자세 운동 영상 있어?,청소년,영상,video:B2Cvy5bmEyM
+q18,청소년 왕복오래달리기 1등급 기준,청소년,기준,criteria:020-청소년-M;criteria:020-청소년-F
+q19,중학생 준비운동 뭐 해요?,청소년,처방,prescription:청소년-13-M-준비운동;prescription:청소년-13-F-준비운동
+q20,초등학생 키 크는 스트레칭 영상,청소년,영상,video:TXE6Y_FpayU
+q21,성장기 학생 근력 운동 프로그램 영상,유소년,영상,video:Eg3GpTv7z8s
+q22,17살 아이 마무리 운동,청소년,처방,prescription:청소년-17-F-정리운동;prescription:청소년-17-M-정리운동
+q23,청소년 상대악력 기준 알려줘,청소년,기준,criteria:028-청소년-F;criteria:028-청소년-M
+q24,마흔한 살 남자 운동 추천,성인,처방,prescription:성인-41-M-본운동
+q25,30대 여자 준비운동,성인,처방,prescription:성인-35-F-준비운동;prescription:성인-30-F-준비운동
+q26,성인 상대악력 1등급이 몇이에요?,성인,기준,criteria:028-성인-M;criteria:028-성인-F
+q27,성인 교차윗몸일으키기 기준,성인,기준,criteria:019-성인-M;criteria:019-성인-F
+q28,직장인 퇴근하고 할 운동 추천해줘,성인,처방,prescription:성인-41-F-본운동;prescription:성인-41-M-본운동
+q29,일흔 살 어르신에게 무리 없는 운동,어르신,처방,prescription:어르신-70-F-본운동;prescription:어르신-70-M-본운동
+q30,어르신 정리운동 뭐가 좋아요?,어르신,처방,prescription:어르신-70-F-정리운동;prescription:어르신-70-M-정리운동
+q31,65세 어르신 준비운동,어르신,처방,prescription:어르신-65-F-준비운동;prescription:어르신-65-M-준비운동
+q32,아이가 공 던지고 받는 운동 영상,유아기,영상,video:90YTJpUn91U
+q33,오늘 서울 날씨 어때?,성인,무관,
+q34,김치찌개 맛있게 끓이는 법 알려줘,성인,무관,
+q35,중학교 수학 숙제 도와줘,청소년,무관,
+q36,넷플릭스 볼만한 영화 추천,유아기,무관,

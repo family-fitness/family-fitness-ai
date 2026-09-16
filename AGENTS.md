@@ -56,9 +56,18 @@ AI 파트만 건드린다. **API 서버(Spring Boot)와 프론트(React Native) 
 처음 한 번
 
 ```bash
+python3 -m venv .venv                  # 3.11 이상 (`pyproject.toml`)
+source .venv/bin/activate              # fish 는 activate.fish · 윈도우는 Scripts\activate
 pip install -e ".[dev]"
 pre-commit install                     # 커밋 훅 (ruff)
 git config core.hooksPath .githooks    # 브랜치·커밋 메시지 검사
+```
+
+**아래의 모든 명령과 `docs/dev` 의 실행 예시는 venv 를 켠 상태를 전제한다.**
+새 셸마다 다시 켠다 — `make` 도 그 셸의 `python` 을 쓴다.
+
+```bash
+source .venv/bin/activate
 ```
 
 품질 검사 — `make verify` 가 CI 와 같은 것을 돈다

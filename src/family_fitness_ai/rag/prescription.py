@@ -35,9 +35,10 @@ PHASES = ("준비운동", "본운동", "정리운동")
 PHASE_SEPARATOR = " / "
 NAME_SEPARATOR = ","
 
-# 본문은 처방 누적 80% 를 덮을 때까지, 최대 40개 (docs/dev/AI-6 §5).
+# 본문은 처방 누적 80% 를 덮을 때까지, 최대 30개 (docs/dev/AI-6 §5).
+# 30개면 400토큰 안에 든다 — `bge-m3` 토크나이저로 쟀다 (docs/dev/AI-8 §1.3).
 COVERAGE = 0.8
-MAX_EXERCISES = 40
+MAX_EXERCISES = 30
 
 # 프로젝트 전체의 저표본 기준 (docs/02 §5.3).
 MIN_ROWS = 30

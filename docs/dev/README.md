@@ -14,7 +14,7 @@
 | `docs/01`~`04` | 확정. 백엔드 실물과 대조해 갱신했다 — [AI-13](AI-13-backend-contract-reconciliation.md) |
 | `stats/` · `ingest/` | **동작한다.** 원자료 → 점수 눈금 → 산출물 6종 → 채점 CLI |
 | `api/` · `common/` | **동작한다.** 설정·오류·로그·`/healthz`·`/readyz`·`/v1/fitness/assessment` |
-| `rag/` | 처방 어휘·청크 산출 ([AI-6](AI-6-prescription-corpus.md)) |
+| `rag/` | 처방 어휘·청크 ([AI-6](AI-6-prescription-corpus.md)) · 임베딩·색인·검색 ([AI-8](AI-8-vector-index.md)) — 817청크 · `bge-m3` 1024차원 · `SIM_THRESHOLD` 0.50 |
 | `labeling/` | 수집 · 화면 이름표·이름 막대 · 규칙 라벨 · LLM 층 ([AI-7](AI-7-video-labeling.md)) — 영유아·청소년 43편: 운동명 32편 · 어휘 63개 · 시각 127/142. 채널 전체는 하지 않는다 |
 | `graph/` | `__init__.py` 만 있다 — **여기가 남은 일이다** |
 | CI | `ruff` · `mypy` · `pytest` |
@@ -56,10 +56,10 @@ AI-7 영상 라벨링 ────┤                                           
 | [AI-3](AI-3-service-skeleton.md) | FastAPI 골격 | — | ✅ |
 | [AI-4](AI-4-assessment-endpoint.md) | `POST /fitness/assessment` | AI-2·3 | ✅ **보류** — 호출부 없음 |
 | **[AI-6](AI-6-prescription-corpus.md)** | 처방 어휘·청크 | AI-1 | ✅ |
-| **[AI-8](AI-8-vector-index.md)** | 임베딩·색인·검색 | AI-6 | `coach/messages` 용. `coach/runs` 에는 필요 없다. **다음 브랜치에서 진행·확정** |
+| **[AI-8](AI-8-vector-index.md)** | 임베딩·색인·검색 | AI-6 | ✅ — `coach/messages` 용. `coach/runs` 에는 필요 없다 |
 | **[AI-10](AI-10-coach-messages.md)** | `POST /coach/messages` | AI-8 | 호출부 있음 |
 | **[AI-11](AI-11-coach-runs.md)** | 미션 편성 — 비슷한 측정 기록 매칭 | AI-6 (영상은 AI-7) | **다음** · 호출부 있음 |
-| [AI-7](AI-7-video-labeling.md) | 영상 수집·라벨링 | — | **진행 중** — 영유아 31편 끝 · 채널 전체 남음 |
+| [AI-7](AI-7-video-labeling.md) | 영상 수집·라벨링 | — | ✅ — 영유아·청소년 43편. 채널 전체는 하지 않는다 |
 | [AI-5](AI-5-trajectory-bands.md) | `POST /fitness/trajectory` | AI-3 | 호출부 있으나 스텁으로 화면이 돈다 |
 | [AI-9](AI-9-videos-search.md) | `POST /videos/search` | AI-8 | 백엔드 자체 조회로 충분 |
 | [AI-12](AI-12-deploy.md) | 컨테이너·배포·관측 | AI-3 | 마지막 |
@@ -75,7 +75,7 @@ AI-7 영상 라벨링 ────┤                                           
 | 묶음 | 이슈 | 끝나면 보여줄 수 있는 것 |
 |---|---|---|
 | **M1 · 미션을 편성한다** | AI-6 · AI-11 | 측정치와 비슷한 기록의 처방으로 주간 제안이 나오고 백엔드가 승인 게이트를 태운다 |
-| **M2 · 코치가 답한다** | AI-8 · AI-10 | 질문에 공단 자료를 인용해 답하고, 없으면 거부한다 |
+| **M2 · 코치가 답한다** | AI-8 ✅ · AI-10 | 질문에 공단 자료를 인용해 답하고, 없으면 거부한다 |
 | **M3 · 영상과 배포** | AI-7 · AI-12 | 운동 이름에 영상이 붙고 두 컨테이너가 뜬다 |
 
 **보류** — AI-4(완료·호출부 없음) · AI-5 · AI-9. 계약에는 남는다. 소비자가 생기면
@@ -94,11 +94,10 @@ LLM 은 문구에만 쓰며 실패해도 고정 문구로 돈다. 영상이 없�
 |---|---|---|---|
 | ① | `fitness_test_items` 에 `score` 컬럼이 없다 | [AI-13](AI-13-backend-contract-reconciliation.md) §3.5 | 저장 — 구현은 안 막는다 |
 | ② | 영상 라벨을 백엔드에 넣을 경로 | [AI-13](AI-13-backend-contract-reconciliation.md) §2.2 | AI-7 적재 |
-| ③ | `SIM_THRESHOLD` 값 | `04` §6 ② | AI-8 이 재는 것이 산출이다 |
-| ④ | 임베딩 모델과 차원 | `01` §7 ② · `04` §6 ① | **우리가 고른다.** AI-8 착수 전에 정한다 |
 
-**막는 것이 하나도 없다.** ①②는 저장·적재 쪽이고 구현을 멈추지 않는다. ③은 AI-8 이
-스스로 재고, ④는 우리 결정이다.
+**막는 것이 하나도 없다.** ①②는 저장·적재 쪽이고 구현을 멈추지 않는다.
+③ `SIM_THRESHOLD` 와 ④ 임베딩 모델은 AI-8 이 재고 골라 닫았다
+([AI-8](AI-8-vector-index.md) §1.3 · §5).
 
 ### 4.1 등급은 백엔드를 따른다
 
