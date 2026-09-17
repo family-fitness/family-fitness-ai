@@ -1,70 +1,46 @@
-"""환경변수를 타입 있는 객체 하나로 읽는다 (docs/01 §3.2).
-
-기동 시 한 번 읽고 검증한다. 요청마다 `os.environ` 을 보지 않는다.
-**값은 이미지에도 코드에도 없다** — 배포에서는 Secrets Manager 와 SSM 이 주입한다.
-
-없어도 되는 값과 없으면 안 되는 값을 나눈다. `SIM_THRESHOLD` 는 후자지만 여기서
-막지 않는다 — 비어 있으면 `/readyz` 가 준비되지 않았다고 답한다 (docs/04 §6 ②).
-기동 자체를 막으면 무엇이 빠졌는지 로그를 뒤져야 알 수 있다.
-"""
+"""환경 설정. 값은 .env 에서 오고, 이름만 .env.example 에 둔다."""
 
 from __future__ import annotations
 
 from functools import lru_cache
 from pathlib import Path
-from typing import Literal
 
-from pydantic import Field
+from pydantic import field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
-VectorBackend = Literal["pgvector", "faiss"]
-LabelerBackend = Literal["llama", "claude"]
-
-# 기본값이 있어 "설정했는가"가 뜻이 없는 이름. `configured()` 에 싣지 않는다.
-_NOT_REPORTED = frozenset({"vector_backend", "labeler_backend", "llama_server_url"})
+ROOT = Path(__file__).resolve().parents[3]
 
 
 class Settings(BaseSettings):
-    # 빈 값은 설정하지 않은 것으로 본다. `.env.example` 을 복사하면 `SIM_THRESHOLD=` 처럼
-    # 빈 줄이 남는데, 그것을 숫자로 읽으려다 기동이 막히면 안 된다.
-    model_config = SettingsConfigDict(
-        env_file=".env", extra="ignore", case_sensitive=False, env_ignore_empty=True
-    )
+    model_config = SettingsConfigDict(env_file=ROOT / ".env", extra="ignore")
 
-    # 비밀값 — 없어도 기동한다. 쓰는 시점에 없으면 그 기능이 실패한다.
-    database_url: str | None = None
-    anthropic_api_key: str | None = None
-    youtube_api_key: str | None = None
-    kspo_service_key: str | None = None
-    kspo_endpoint: str | None = None
+    #: 임베딩 서버 (llama.cpp · bge-m3). 인덱스를 만들 때 쓴 것과 같아야 한다.
+    embedding_url: str = "http://127.0.0.1:8082"
+    #: 검색이 이 아래면 근거로 치지 않는다.
+    sim_threshold: float = 0.57
 
-    # 설정
-    mlflow_tracking_uri: str | None = None
-    # docs/01 §1 — DB가 서기 전에도 개발이 멈추지 않게 한다. 배포 기본값은 pgvector 다.
-    vector_backend: VectorBackend = "faiss"
-    # docs/04 §3 — 근거 없는 임계값은 조용히 관련 자료를 버린다. 기본값을 두지 않는다.
-    sim_threshold: float | None = Field(default=None, ge=0.0, le=1.0)
-    # docs/dev/AI-7 §3.8 — 영상 라벨 LLM. 기본은 외부 호출이 없는 로컬이다 (AGENTS.md §3).
-    labeler_backend: LabelerBackend = "llama"
-    llama_server_url: str = "http://127.0.0.1:8081"
-    # 비우면 백엔드의 기본 모델이다.
-    labeler_model: str | None = None
+    index_dir: Path = ROOT / "data" / "index"
+    release_dir: Path = ROOT / "data" / "release"
+    raw_dir: Path = ROOT / "data" / "raw"
 
-    def configured(self) -> dict[str, bool]:
-        """이름과 설정 여부만 돌려준다. **값을 로그에 찍지 않는다** (docs/01 §5)."""
-        return {
-            name: getattr(self, name) is not None
-            for name in self.__class__.model_fields
-            if name not in _NOT_REPORTED
-        }
+    #: 편성과 문구를 LLM 이 맡나. 기본은 켜짐이고, 키가 없거나 호출이 실패하면
+    #: 규칙 편성으로 내려간다 — 서비스가 멈추지는 않는다.
+    coach_llm: bool = True
+    #: claude | gemini
+    coach_backend: str = "claude"
+    #: 비우면 백엔드의 기본 모델.
+    coach_model: str = ""
+
+    anthropic_api_key: str = ""
+    gemini_api_key: str = ""
+
+    @field_validator("coach_llm", mode="before")
+    @classmethod
+    def _empty_is_default(cls, value: object) -> object:
+        """.env 는 이름만 적고 값을 비워 두는 일이 잦다. 빈 값은 기본값이다."""
+        return True if value == "" else value
 
 
-# 산출물과 인덱스의 자리. 환경변수로 가르지 않는다 — 저장소 안의 경로다.
-RELEASE_DIR = Path("data/release")
-INDEX_DIR = Path("data/index")
-
-
-@lru_cache(maxsize=1)
-def get_settings() -> Settings:
-    """기동 시 한 번. 캐시가 '한 번 읽는다'를 강제한다."""
+@lru_cache
+def settings() -> Settings:
     return Settings()

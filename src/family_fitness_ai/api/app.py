@@ -1,86 +1,157 @@
-"""FastAPI 앱 (docs/dev/AI-3).
+"""AI 서비스.
 
-`/healthz`·`/readyz` 와 `/v1/fitness/assessment` 를 낸다. 나머지 `/v1` 은 그 갈래에서
-붙는다 — 골격이라고 해서 "나중에 쓸 것"을 미리 넣지 않는다 (docs/03 §12).
-
-실행:
-    uvicorn family_fitness_ai.api.app:app --reload --port 8000
+계약은 docs/인터페이스-명세.md 다. 기준 경로 /v1, JSON(UTF-8), 인증 없음.
+성공은 payload 를 그대로 내고, 실패는 {"error": {...}} 한 모양이다.
 """
 
 from __future__ import annotations
 
-import time
-from collections.abc import Awaitable, Callable
+import logging
 
-from fastapi import FastAPI, Request
+from fastapi import APIRouter, FastAPI, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
+from starlette.exceptions import HTTPException as StarletteHTTPException
 
-from ..common import logging as reqlog
-from ..common.errors import ApiError, ErrorCode
-from ..common.settings import get_settings
-from . import fitness, readiness
+from family_fitness_ai.api.schemas import (
+    MessageIn,
+    ProfileIn,
+    RunIn,
+    TrajectoryIn,
+    VideoSearchIn,
+)
+from family_fitness_ai.coach import answer as coach_answer
+from family_fitness_ai.coach.compose import Constraints, RunProfile
+from family_fitness_ai.coach.runs import store
+from family_fitness_ai.common.errors import ApiError
+from family_fitness_ai.stats.assess import Profile, assessment, trajectory
+from family_fitness_ai.video.videos import search_videos
 
-app = FastAPI(title="family-fitness-ai", version="0.1.0", docs_url="/docs")
-app.include_router(fitness.router)
+log = logging.getLogger(__name__)
 
-
-@app.middleware("http")
-async def log_one_line(
-    request: Request, call_next: Callable[[Request], Awaitable[JSONResponse]]
-) -> JSONResponse:
-    """요청 한 건이 로그 한 줄이다 (docs/01 §5)."""
-    reqlog.reset_fields()
-    started = time.perf_counter()
-    response = await call_next(request)
-    reqlog.emit(
-        path=request.url.path,
-        method=request.method,
-        status=response.status_code,
-        latency_ms=round((time.perf_counter() - started) * 1000, 1),
-    )
-    return response
+app = FastAPI(title="우리가족 체력키움 · AI", version="0.1.0")
+v1 = APIRouter(prefix="/v1")
 
 
 @app.exception_handler(ApiError)
-async def handle_api_error(_: Request, exc: ApiError) -> JSONResponse:
-    """예외 하나가 봉투 하나로 변환된다. 라우터마다 `try` 를 쓰지 않는다."""
-    reqlog.add_fields(error_code=exc.code.value)
-    return JSONResponse(status_code=exc.status_code, content=exc.body())
+async def _api_error(_: Request, error: ApiError) -> JSONResponse:
+    return JSONResponse(status_code=error.status, content=error.body())
+
+
+#: FastAPI 가 스스로 내는 오류의 코드 이름. 우리가 던진 것이 아니어도 나가는
+#: 모양은 같아야 한다 — 호출하는 쪽이 error.code 하나로 분기할 수 있게.
+_STATUS_CODES = {404: "NOT_FOUND", 405: "METHOD_NOT_ALLOWED"}
+
+
+@app.exception_handler(StarletteHTTPException)
+async def _http_error(request: Request, error: StarletteHTTPException) -> JSONResponse:
+    code = _STATUS_CODES.get(
+        error.status_code, "BAD_REQUEST" if error.status_code < 500 else "TEMPORARILY_UNAVAILABLE"
+    )
+    if error.status_code == 405:
+        message = f"{request.method} {request.url.path} 는 받지 않습니다"
+    elif error.status_code == 404:
+        message = f"그런 경로가 없습니다: {request.url.path}"
+    else:
+        message = str(error.detail)
+    return JSONResponse(
+        status_code=error.status_code, content={"error": {"code": code, "message": message}}
+    )
 
 
 @app.exception_handler(RequestValidationError)
-async def handle_validation_error(_: Request, exc: RequestValidationError) -> JSONResponse:
-    """필수 필드 누락·타입 불일치는 `400 BAD_REQUEST` 다 (docs/03 §2.2).
+async def _invalid(_: Request, error: RequestValidationError) -> JSONResponse:
+    # 검증 중에 던진 우리 오류(혈압 항목 등)는 그 모양을 지킨다.
+    for problem in error.errors():
+        cause = problem.get("ctx", {}).get("error")
+        if isinstance(cause, ApiError):
+            return JSONResponse(status_code=cause.status, content=cause.body())
+    first = error.errors()[0] if error.errors() else {}
+    where = " → ".join(str(part) for part in first.get("loc", ())[1:])
+    message = f"{where}: {first.get('msg', '요청을 읽을 수 없습니다')}"
+    return JSONResponse(
+        status_code=400, content={"error": {"code": "BAD_REQUEST", "message": message}}
+    )
 
-    **호출자 버그이므로 화면에 띄우지 않는다.** 메시지는 개발자용이다.
 
-    `exc.errors()` 를 그대로 넣지 않는다 — 항목마다 `input` 에 문제가 된 값이
-    실려 있어 신장·체중·측정값이 오류 응답으로 되돌아간다. 어디가 왜 틀렸는지만
-    남기면 호출자가 고치는 데 충분하다 (docs/01 §5).
-    """
-    where = [
-        {
-            "loc": ".".join(str(part) for part in item["loc"]),
-            "type": item["type"],
-            "msg": item["msg"],
-        }
-        for item in exc.errors()
+def _profile(body: ProfileIn) -> Profile:
+    return Profile(
+        profile_ref=body.profile_ref,
+        age=body.age,
+        age_unit=body.age_unit,
+        sex=body.sex,
+        height_cm=body.height_cm,
+        weight_kg=body.weight_kg,
+        measurements=body.measurements,
+    )
+
+
+@v1.post("/fitness/assessment")
+def post_assessment(body: ProfileIn) -> dict[str, object]:
+    return assessment(_profile(body))
+
+
+@v1.post("/fitness/trajectory")
+def post_trajectory(body: TrajectoryIn) -> dict[str, object]:
+    return trajectory(_profile(body), body.item_code, body.horizon_years)
+
+
+@v1.post("/videos/search")
+def post_video_search(body: VideoSearchIn) -> dict[str, object]:
+    if not body.fitness_factors and not body.exercise_names:
+        raise ApiError(
+            400,
+            "BAD_REQUEST",
+            "fitness_factors 와 exercise_names 중 최소 하나는 있어야 합니다",
+        )
+    return search_videos(
+        body.age_group,
+        tuple(body.fitness_factors),
+        tuple(body.exercise_names),
+        body.k,
+    )
+
+
+@v1.post("/coach/runs", status_code=202)
+def post_run(body: RunIn) -> dict[str, object]:
+    profiles = [
+        RunProfile(
+            ref=row.ref,
+            role=row.role,
+            age=row.age,
+            age_unit=row.age_unit,
+            sex=row.sex,
+            input_level=row.input_level,
+            height_cm=row.height_cm,
+            weight_kg=row.weight_kg,
+            measurements=row.measurements,
+        )
+        for row in body.profile_refs
     ]
-    error = ApiError(ErrorCode.BAD_REQUEST, f"요청이 계약과 다르다: {where}")
-    reqlog.add_fields(error_code=error.code.value)
-    return JSONResponse(status_code=error.status_code, content=error.body())
+    constraints = Constraints(
+        days_per_week=body.constraints.days_per_week,
+        minutes_per_session=body.constraints.minutes_per_session,
+        quiet=body.constraints.quiet,
+        small_space=body.constraints.small_space,
+        no_props=body.constraints.no_props,
+    )
+    run = store.start(profiles, body.period.start_date, body.period.weeks, constraints)
+    return {"run_id": run.run_id, "status": run.status, "poll_after_ms": 1500}
 
 
-@app.get("/healthz")
-async def healthz() -> dict[str, str]:
-    """프로세스가 살아 있다. **의존을 확인하지 않는다** (docs/01 §2.3)."""
+@v1.get("/coach/runs/{run_id}")
+def get_run(run_id: str) -> dict[str, object]:
+    return store.get(run_id).dict()
+
+
+@v1.post("/coach/messages")
+def post_message(body: MessageIn) -> dict[str, object]:
+    return coach_answer.answer(body.question, body.age_group or "", body.profile_ref)
+
+
+@app.get("/health")
+def health() -> dict[str, str]:
     return {"status": "ok"}
 
 
-@app.get("/readyz")
-async def readyz() -> JSONResponse:
-    """기준표·산출물·벡터·임계값을 확인한다. 준비되지 않으면 503 이다."""
-    result = readiness.check(get_settings())
-    reqlog.add_fields(ready=result.ready)
-    return JSONResponse(status_code=200 if result.ready else 503, content=result.body())
+app.include_router(v1)

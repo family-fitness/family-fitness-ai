@@ -1,0 +1,13 @@
+{
+  "run_id": "cr_01J7Q3M8VZ2KQ4HB",
+  "status": "refused",
+  "steps": [
+    {"seq": 1, "name": "assess", "status": "ok", "summary": "연령대 유소년 · 만 8세"},
+    {"seq": 2, "name": "retrieve", "status": "failed", "summary": "연령 필터 통과 청크 0건"},
+    {"seq": 3, "name": "compose", "status": "failed", "summary": "편성 근거가 없어 중단"},
+    {"seq": 4, "name": "verify", "status": "failed", "summary": "인용 0건"}
+  ],
+  "proposal": null,
+  "refused": true,
+  "refusal_reason": "age_filter_empty"
+}

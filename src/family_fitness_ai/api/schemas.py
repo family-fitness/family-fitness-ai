@@ -1,110 +1,99 @@
-"""`POST /v1/fitness/assessment` 의 요청·응답 (docs/03 §3).
-
-**검증은 요청 모델에 있다.** 라우터 안에서 검사하면 엔드포인트마다 빠뜨린다
-(docs/dev/AI-3 §2.3).
-"""
+"""요청 모양. 응답은 계약 문서의 payload 를 그대로 낸다 — 봉투를 씌우지 않는다."""
 
 from __future__ import annotations
 
-from typing import Annotated
+from datetime import date
+from typing import Annotated, Literal
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import BaseModel, Field, field_validator
 
-from ..common.errors import ApiError, ErrorCode
-from ..common.types import (
-    BLOCKED_ITEM_CODES,
-    AgeGroup,
-    AgeUnit,
-    Band,
-    FitnessFactor,
-    InputLevel,
-    Sex,
-)
+from family_fitness_ai.common.errors import item_not_allowed
+from family_fitness_ai.common.items import BLOOD_PRESSURE
 
-# docs/03 §3.2 — 상시 노출 문구. 그대로 표시한다.
-DISCLAIMER = (
-    "국민체력100 측정 데이터를 바탕으로 한 참고 정보입니다. "
-    "질병의 진단·치료를 위한 것이 아니며, 건강에 관한 판단은 전문가와 상담하세요."
-)
+Sex = Literal["M", "F"]
+AgeUnit = Literal["세", "개월"]
+AgeGroup = Literal["유아기", "유소년", "청소년", "성인", "어르신"]
+Role = Literal["주행자", "동반자", "응원"]
+
+Measurements = dict[str, float]
 
 
-class AssessmentRequest(BaseModel):
+def _no_blood_pressure(values: Measurements | None) -> Measurements | None:
+    if not values:
+        return values
+    found = [code for code in BLOOD_PRESSURE if code in values]
+    if found:
+        raise item_not_allowed(found)
+    return values
+
+
+class ProfileIn(BaseModel):
     profile_ref: str
-    age: int
-    age_unit: AgeUnit
+    age: Annotated[int, Field(ge=0, le=1200)]
+    age_unit: AgeUnit = "세"
     sex: Sex
-    height_cm: Annotated[float, Field(ge=30.0, le=230.0)] | None = None
-    weight_kg: Annotated[float, Field(ge=5.0, le=250.0)] | None = None
-    measurements: dict[str, float] = Field(default_factory=dict)
+    height_cm: float | None = None
+    weight_kg: float | None = None
+    measurements: Measurements | None = None
 
     @field_validator("measurements")
     @classmethod
-    def _no_blood_pressure(cls, value: dict[str, float]) -> dict[str, float]:
-        """혈압은 값이 있어도 받지 않는다 (docs/03 §9). 혈압 해석은 질병 영역이다."""
-        blocked = sorted(BLOCKED_ITEM_CODES & value.keys())
-        if blocked:
-            raise ApiError(
-                ErrorCode.ITEM_NOT_ALLOWED,
-                f"AI는 이 항목을 다루지 않는다: {', '.join(blocked)}",
-            )
-        return value
+    def _check(cls, value: Measurements | None) -> Measurements | None:
+        return _no_blood_pressure(value)
 
 
-class FocusOne(BaseModel):
-    """`copy` 는 계약의 키다 (docs/03 §3.3). `BaseModel.copy` 와 겹쳐 별칭으로 둔다."""
-
-    model_config = ConfigDict(populate_by_name=True)
-
-    factor: FitnessFactor
-    text: str = Field(serialization_alias="copy", validation_alias="copy")
+class TrajectoryIn(ProfileIn):
+    item_code: str = "028"
+    horizon_years: Annotated[int, Field(ge=1, le=10)] = 10
 
 
-class ChildScope(BaseModel):
-    """**점수·백분위·체중이 없다** (docs/03 §2.6).
-
-    아이 화면이 실수로 노출할 값이 애초에 페이로드에 없게 한다. 필드를 더할 때
-    이 문장을 먼저 읽는다.
-    """
-
-    focus_one: FocusOne | None
-
-
-class PeerGrade(BaseModel):
-    grade: str
-    ratio: float
-
-
-class FactorScore(BaseModel):
-    factor: FitnessFactor
-    item_code: str
-    item_name: str
-    item_label: str
-    unit: str
-    value: float | None
-    score: float | None
-    percentile: int | None
-    band: Band | None
-    n: int
-
-
-class ParentCopy(BaseModel):
-    strength: str
-    focus: str
-
-
-class ParentScope(BaseModel):
-    model_config = ConfigDict(populate_by_name=True)
-
-    grade: str | None
-    peer_distribution: list[PeerGrade]
-    factors: list[FactorScore]
-    text: ParentCopy = Field(serialization_alias="copy", validation_alias="copy")
-
-
-class AssessmentResponse(BaseModel):
-    input_level: InputLevel
+class VideoSearchIn(BaseModel):
     age_group: AgeGroup
-    child_scope: ChildScope
-    parent_scope: ParentScope
-    low_sample: bool
-    disclaimer: str = DISCLAIMER
+    fitness_factors: list[str] = Field(default_factory=list)
+    exercise_names: list[str] = Field(default_factory=list)
+    k: Annotated[int, Field(ge=1, le=20)] = 5
+
+
+class RunProfileIn(BaseModel):
+    ref: str
+    role: Role
+    age: Annotated[int, Field(ge=0, le=1200)]
+    age_unit: AgeUnit = "세"
+    sex: Sex
+    input_level: Literal["L0", "L1", "L2"] = "L0"
+    height_cm: float | None = None
+    weight_kg: float | None = None
+    measurements: Measurements | None = None
+
+    @field_validator("measurements")
+    @classmethod
+    def _check(cls, value: Measurements | None) -> Measurements | None:
+        return _no_blood_pressure(value)
+
+
+class PeriodIn(BaseModel):
+    start_date: date
+    weeks: Annotated[int, Field(ge=1, le=4)] = 1
+
+
+class ConstraintsIn(BaseModel):
+    days_per_week: Annotated[int, Field(ge=1, le=7)] = 3
+    minutes_per_session: Annotated[int, Field(ge=5, le=60)] = 15
+    #: 아랫집이 신경 쓰이면 뛰는 동작을 뺀다.
+    quiet: bool = False
+    #: 거실만큼 좁은 곳에서 할 수 있는 것만.
+    small_space: bool = False
+    #: 도구 없이 몸으로만.
+    no_props: bool = False
+
+
+class RunIn(BaseModel):
+    profile_refs: Annotated[list[RunProfileIn], Field(min_length=1, max_length=4)]
+    period: PeriodIn
+    constraints: ConstraintsIn = Field(default_factory=ConstraintsIn)
+
+
+class MessageIn(BaseModel):
+    profile_ref: str = ""
+    age_group: AgeGroup | None = None
+    question: Annotated[str, Field(min_length=1, max_length=500)]
