@@ -7,6 +7,8 @@
 from __future__ import annotations
 
 import logging
+from collections.abc import AsyncIterator
+from contextlib import asynccontextmanager
 
 from fastapi import APIRouter, FastAPI, Request
 from fastapi.exceptions import RequestValidationError
@@ -23,13 +25,33 @@ from family_fitness_ai.api.schemas import (
 from family_fitness_ai.coach import answer as coach_answer
 from family_fitness_ai.coach.compose import Constraints, RunProfile
 from family_fitness_ai.coach.runs import store
-from family_fitness_ai.common.errors import ApiError
+from family_fitness_ai.common.errors import ApiError, temporarily_unavailable
+from family_fitness_ai.common.settings import settings
+from family_fitness_ai.rag.index import missing_files
 from family_fitness_ai.stats.assess import Profile, assessment, trajectory
 from family_fitness_ai.video.videos import search_videos
 
 log = logging.getLogger(__name__)
 
-app = FastAPI(title="우리가족 체력키움 · AI", version="0.1.0")
+
+@asynccontextmanager
+async def lifespan(_: FastAPI) -> AsyncIterator[None]:
+    """인덱스가 없으면 뜨지 않는다.
+
+    없어도 서버는 떠서 평가·궤적만 답하고 코치 쪽은 요청이 올 때마다 깨진다.
+    그러면 배포가 성공한 것처럼 보이고, 아무도 안 보는 새 절반이 죽어 있다.
+    뜨지 않으면 컨테이너가 바로 알려 준다.
+    """
+    absent = missing_files()
+    if absent:
+        raise RuntimeError(
+            f"코퍼스 인덱스가 없다: {settings().index_dir} ({', '.join(absent)} 없음). "
+            "data/index 를 배포에 실었는지 보라"
+        )
+    yield
+
+
+app = FastAPI(title="우리가족 체력키움 · AI", version="0.1.0", lifespan=lifespan)
 v1 = APIRouter(prefix="/v1")
 
 
@@ -57,6 +79,17 @@ async def _http_error(request: Request, error: StarletteHTTPException) -> JSONRe
     return JSONResponse(
         status_code=error.status_code, content={"error": {"code": code, "message": message}}
     )
+
+
+@app.exception_handler(Exception)
+async def _unexpected(_: Request, error: Exception) -> JSONResponse:
+    """예상 못 한 예외도 계약 모양으로 낸다.
+
+    자세한 것은 로그에만 남긴다. 서버 안 경로나 스택이 응답에 실리면 배포한
+    디렉터리 구조가 밖으로 나간다.
+    """
+    log.exception("처리 중 예외", exc_info=error)
+    return JSONResponse(status_code=503, content=temporarily_unavailable().body())
 
 
 @app.exception_handler(RequestValidationError)

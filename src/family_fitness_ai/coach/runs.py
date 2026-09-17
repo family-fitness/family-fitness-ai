@@ -10,6 +10,7 @@
 from __future__ import annotations
 
 import base64
+import logging
 import os
 import threading
 import time
@@ -19,7 +20,9 @@ from typing import Any
 
 from family_fitness_ai.coach import verify
 from family_fitness_ai.coach.compose import Constraints, Plan, RunProfile, Step, build
-from family_fitness_ai.common.errors import run_in_progress, run_not_found
+from family_fitness_ai.common.errors import ApiError, run_in_progress, run_not_found
+
+log = logging.getLogger(__name__)
 
 #: 이만큼 지난 실행은 버린다. 폴링이 끝난 뒤에도 잠깐은 남겨 둔다.
 TTL_SEC = 30 * 60
@@ -101,8 +104,15 @@ class Store:
     ) -> None:
         try:
             plan = build(profiles, start_date, weeks, constraints)
-        except Exception as error:  # noqa: BLE001 — 실행 하나가 넘어져도 서비스는 산다
-            run.steps = [Step(1, "assess", "failed", f"실행 중 오류: {error}")]
+        except ApiError as error:  # 우리가 던진 것은 사람이 읽을 말이 붙어 있다
+            log.warning("편성 중단: %s", error.message)
+            run.steps = [Step(1, "assess", "failed", error.message)]
+            run.status = "failed"
+            return
+        except Exception:  # noqa: BLE001 — 실행 하나가 넘어져도 서비스는 산다
+            # 원문을 요약에 싣지 않는다. 서버 안 경로가 응답으로 나간다.
+            log.exception("편성 중 예외")
+            run.steps = [Step(1, "assess", "failed", "편성 중 오류가 났습니다")]
             run.status = "failed"
             return
 
