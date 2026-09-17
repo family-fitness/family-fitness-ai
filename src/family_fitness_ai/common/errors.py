@@ -1,48 +1,39 @@
-"""오류는 한 형태다 (docs/03 §2.2).
+"""실패는 한 모양이다 — {"error": {"code", "message"}}.
 
-    {"error": {"code": "...", "message": "..."}}
-
-성공은 payload를 그대로 돌려준다. 봉투를 씌우지 않는다.
-
-**거부(`refused: true`)는 이 경로를 타지 않는다.** 자료에 없어 답하지 못하는 것은
-정상 동작이고 HTTP 200 이다. 예외로 만들면 거부가 오류 로그에 섞여 거부율을
-측정할 수 없다 (docs/01 §5).
+성공은 payload 를 그대로 낸다. 봉투를 씌우지 않는다.
 """
 
 from __future__ import annotations
 
-from enum import StrEnum
-
-
-class ErrorCode(StrEnum):
-    BAD_REQUEST = "BAD_REQUEST"
-    ITEM_NOT_ALLOWED = "ITEM_NOT_ALLOWED"
-    RUN_NOT_FOUND = "RUN_NOT_FOUND"
-    RUN_IN_PROGRESS = "RUN_IN_PROGRESS"
-    TEMPORARILY_UNAVAILABLE = "TEMPORARILY_UNAVAILABLE"
-
-
-# docs/03 §2.2 의 표. 코드 하나에 상태 하나다.
-STATUS_OF: dict[ErrorCode, int] = {
-    ErrorCode.BAD_REQUEST: 400,
-    ErrorCode.ITEM_NOT_ALLOWED: 400,
-    ErrorCode.RUN_NOT_FOUND: 404,
-    ErrorCode.RUN_IN_PROGRESS: 409,
-    ErrorCode.TEMPORARILY_UNAVAILABLE: 503,
-}
-
 
 class ApiError(Exception):
-    """계약의 오류 하나. `message` 는 개발자용이고 화면에 그대로 내지 않는다."""
+    """호출자에게 그대로 나가는 오류. 코드 표는 docs/인터페이스-명세.md 에 있다."""
 
-    def __init__(self, code: ErrorCode, message: str) -> None:
+    def __init__(self, status: int, code: str, message: str) -> None:
         super().__init__(message)
+        self.status = status
         self.code = code
         self.message = message
 
-    @property
-    def status_code(self) -> int:
-        return STATUS_OF[self.code]
-
     def body(self) -> dict[str, dict[str, str]]:
-        return {"error": {"code": self.code.value, "message": self.message}}
+        return {"error": {"code": self.code, "message": self.message}}
+
+
+def bad_request(message: str) -> ApiError:
+    return ApiError(400, "BAD_REQUEST", message)
+
+
+def item_not_allowed(codes: list[str]) -> ApiError:
+    return ApiError(400, "ITEM_NOT_ALLOWED", f"받지 않는 측정 항목입니다: {', '.join(codes)}")
+
+
+def run_not_found(run_id: str) -> ApiError:
+    return ApiError(404, "RUN_NOT_FOUND", f"실행을 찾을 수 없습니다: {run_id}")
+
+
+def run_in_progress() -> ApiError:
+    return ApiError(409, "RUN_IN_PROGRESS", "실행 중인 코치 실행이 있습니다")
+
+
+def temporarily_unavailable(message: str = "잠시 후 다시 시도해 주세요") -> ApiError:
+    return ApiError(503, "TEMPORARILY_UNAVAILABLE", message)

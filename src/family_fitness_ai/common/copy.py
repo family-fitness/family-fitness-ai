@@ -1,70 +1,77 @@
-"""화면에 나가는 문구 (docs/03).
+"""화면에 나가는 문구.
 
-**문구는 규칙으로 만든다. LLM이 아니다.** `docs/01` §3.1 이 LLM 호출을 `compose`
-한 곳으로 묶었고, `assessment` 는 그 그래프를 타지 않는다.
-
-한 모듈에 모으는 이유는 나중에 `verify` 가 같은 표를 봐야 하기 때문이다
-(`docs/03` §5.4). 문구가 코드에 흩어지면 금지 어휘 검사가 닿지 못하는 자리가 생긴다.
+band·factor 같은 코드값은 화면에 나가지 않는다. 표시 문구는 전부 여기서 나온다.
+"부족"·"미달"·"하위"를 쓰지 않는다 — 아이가 읽는 화면이다.
 """
 
 from __future__ import annotations
 
-from .types import Band, FitnessFactor
+DISCLAIMER = (
+    "국민체력100 측정 데이터를 바탕으로 한 참고 정보입니다. "
+    "질병의 진단·치료를 위한 것이 아니며, 건강에 관한 판단은 전문가와 상담하세요."
+)
 
-# docs/03 §2.6 — "부족"·"미달"·"하위"를 쓰지 않는다. 순위가 아니라 활동으로 말한다.
-FORBIDDEN_WORDS = ("부족", "미달", "하위", "열등", "낙제", "미흡")
+TRAJECTORY_NOTICE = "집단 분포를 바탕으로 한 참고 범위입니다. 개인의 변화를 나타내지 않습니다."
 
-# docs/03 §3.5 의 표가 정본이다.
-BAND_PHRASE: dict[Band, str] = {
+#: band 코드 → 부모가 읽는 말.
+BAND_COPY = {
     "strength": "잘하고 있는 영역",
     "steady": "꾸준히 하고 있는 영역",
     "growth": "지금 키우기 좋은 영역",
 }
 
-# 아이 화면 문구. 요인 하나에 하나이고, 순위·비교를 담지 않는다 (docs/03 §3.3).
-CHILD_FOCUS: dict[FitnessFactor, str] = {
-    "심폐지구력": "이번 주는 숨이 차오를 만큼 신나게 움직여볼까요",
-    "근력": "이번 주는 몸을 밀고 당기는 동작을 해볼까요",
-    "근지구력": "이번 주는 같은 동작을 여러 번 반복해볼까요",
+#: verify 가 반환 직전에 거르는 말. 하나라도 있으면 통과하지 않는다.
+BANNED_WORDS = (
+    "부족",
+    "미달",
+    "하위",
+    "열등",
+    "비만",
+    "저체중",
+    "낙제",
+    "뒤떨어",
+    "문제가 있습니다",
+)
+
+#: 요인별로 아이에게 건네는 권유. 처방이 비어도 이 말은 근거 없이 서지 않는다 —
+#: 요인을 지목한 뒤에만 쓴다.
+FOCUS_COPY = {
+    "심폐지구력": "이번 주는 숨이 조금 차오를 때까지 움직여 볼까요",
+    "근력": "이번 주는 힘껏 밀고 당기는 동작을 해볼까요",
+    "근지구력": "이번 주는 같은 동작을 천천히 여러 번 해볼까요",
     "유연성": "이번 주는 몸을 길게 늘이는 동작을 해볼까요",
-    "민첩성": "이번 주는 방향을 바꾸며 재빠르게 움직여볼까요",
+    "민첩성": "이번 주는 방향을 빠르게 바꾸는 동작을 해볼까요",
     "순발력": "이번 주는 힘껏 뛰어오르는 동작을 해볼까요",
-    "협응력": "이번 주는 손과 눈을 함께 쓰는 놀이를 해볼까요",
-    "평형성": "이번 주는 한 발로 서서 균형을 잡아볼까요",
+    "협응력": "이번 주는 눈과 손을 같이 쓰는 동작을 해볼까요",
+    "평형성": "이번 주는 한 발로 버티는 동작을 해볼까요",
 }
 
-# 측정값이 없을 때(`L0`·`L1`)의 부모 화면 두 줄.
-NO_MEASUREMENT_PARENT: dict[str, str] = {
-    "strength": "측정값을 넣으면 요인별로 살펴볼 수 있습니다",
-    "focus": "측정값을 넣으면 이번에 키우기 좋은 영역을 알려드립니다",
-}
 
-# 점수가 난 요인이 하나뿐이라 `strength` 와 `focus` 가 같은 요인을 가리킬 때.
-# 하나만 재고 두 가지를 말할 수는 없다 (docs/03).
-SINGLE_FACTOR_STRENGTH = "측정된 요인이 하나여서 견줄 영역이 아직 없습니다"
-
-
-def child_focus(factor: FitnessFactor) -> str:
-    return CHILD_FOCUS[factor]
+def band_of(percentile: int | None) -> str | None:
+    """백분위를 band 로. 미측정이면 None 이다."""
+    if percentile is None:
+        return None
+    if percentile >= 75:
+        return "strength"
+    if percentile >= 25:
+        return "steady"
+    return "growth"
 
 
-def _topic_particle(word: str) -> str:
-    """받침이 있으면 `은`, 없으면 `는`.
-
-    지금 요인 여덟은 전부 받침으로 끝나 늘 `은` 이지만, 요인이 늘었을 때 조사가
-    어긋나는 것을 코드가 아니라 글자로 판단하게 둔다.
-    """
-    last = word[-1]
-    if "가" <= last <= "힣":
-        return "은" if (ord(last) - 0xAC00) % 28 else "는"
-    return "은(는)"
+def with_topic(noun: str) -> str:
+    """받침을 보고 은/는을 붙인다. 「유연성은」 · 「자세는」."""
+    if not noun:
+        return noun
+    last = ord(noun[-1])
+    if 0xAC00 <= last <= 0xD7A3:
+        return noun + ("은" if (last - 0xAC00) % 28 else "는")
+    return noun + "은(는)"
 
 
-def parent_line(factor: str, band: Band) -> str:
-    """부모 화면 한 줄. `docs/03` §3.2 의 `copy.strength`·`copy.focus` 가 이 모양이다."""
-    return f"{factor}{_topic_particle(factor)} {BAND_PHRASE[band]}입니다"
+def factor_copy(factor: str, band: str) -> str:
+    """「유연성은 지금 키우기 좋은 영역입니다」."""
+    return f"{with_topic(factor)} {BAND_COPY[band]}입니다"
 
 
-def contains_forbidden(text: str) -> list[str]:
-    """금지 어휘를 찾아 돌려준다. 검사와 `verify` 가 같은 목록을 본다."""
-    return [w for w in FORBIDDEN_WORDS if w in text]
+def banned_words_in(text: str) -> list[str]:
+    return [w for w in BANNED_WORDS if w in text]
