@@ -181,7 +181,7 @@ def build_thresholds(data_dir: Path, out_dir: Path) -> int:
 
     path = out_dir / "grade_thresholds.csv"
     with path.open("w", newline="", encoding="utf-8") as fh:
-        writer = csv.DictWriter(fh, fieldnames=list(rows[0].keys()))
+        writer = csv.DictWriter(fh, lineterminator="\n", fieldnames=list(rows[0].keys()))
         writer.writeheader()
         writer.writerows(rows)
     return len(rows)
@@ -239,7 +239,7 @@ def build_quantiles(raw: pd.DataFrame, out_dir: Path) -> int:
 
     path = out_dir / "value_quantiles.csv"
     with path.open("w", newline="", encoding="utf-8") as fh:
-        writer = csv.DictWriter(fh, fieldnames=list(rows[0].keys()))
+        writer = csv.DictWriter(fh, lineterminator="\n", fieldnames=list(rows[0].keys()))
         writer.writeheader()
         ordered = sorted(rows, key=lambda r: (r["age_group"], r["sex"], r["item_code"], r["age"]))
         writer.writerows(ordered)
@@ -267,7 +267,7 @@ def build_distribution(raw: pd.DataFrame, out_dir: Path) -> int:
 
     path = out_dir / "grade_distribution.csv"
     with path.open("w", newline="", encoding="utf-8") as fh:
-        writer = csv.DictWriter(fh, fieldnames=list(rows[0].keys()))
+        writer = csv.DictWriter(fh, lineterminator="\n", fieldnames=list(rows[0].keys()))
         writer.writeheader()
         writer.writerows(rows)
     return len(rows)

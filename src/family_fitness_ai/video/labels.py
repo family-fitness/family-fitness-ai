@@ -347,7 +347,7 @@ def build(
 
     labels.sort(key=lambda label: label.name_on_video)
     with path.open("w", newline="", encoding="utf-8") as fh:
-        writer = csv.DictWriter(fh, fieldnames=list(asdict(labels[0]).keys()))
+        writer = csv.DictWriter(fh, lineterminator="\n", fieldnames=list(asdict(labels[0]).keys()))
         writer.writeheader()
         for label in labels:
             writer.writerow(asdict(label))

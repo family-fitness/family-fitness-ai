@@ -97,9 +97,13 @@ def _pieces(frame: dict, field: str) -> list[str]:
 
 
 def _canonical(counts: collections.Counter[str]) -> dict[str, str]:
-    """OCR 이 흔들린 글자를 가장 많이 나온 꼴로 모은다."""
+    """OCR 이 흔들린 글자를 가장 많이 나온 꼴로 모은다.
+
+    같은 횟수면 글자 순으로 가른다. 가르지 않고 두면 어느 꼴이 대표가 될지가
+    파이썬의 해시 순서에 딸려 가서, 같은 입력으로 두 번 돌린 표가 서로 달라진다.
+    """
     canon: dict[str, str] = {}
-    ordered = [text for text, _ in counts.most_common()]
+    ordered = sorted(counts, key=lambda text: (-counts[text], text))
     for text in ordered:
         match = next(
             (
@@ -206,7 +210,9 @@ def clips_of_video(video_id: str, screen: dict) -> list[Clip]:
     total = len(frames)
 
     seen = [(_pieces(f, "texts"), _pieces(f, "bar")) for f in frames]
-    counts = collections.Counter(t for titles, bars in seen for t in set(titles + bars))
+    counts = collections.Counter(
+        text for titles, bars in seen for text in sorted(set(titles + bars))
+    )
     canon = _canonical(counts)
 
     sources = {}
@@ -254,7 +260,7 @@ def build(raw_dir: Path, out_dir: Path) -> list[Clip]:
 
     path = out_dir / "video_clips.csv"
     with path.open("w", newline="", encoding="utf-8") as fh:
-        writer = csv.writer(fh)
+        writer = csv.writer(fh, lineterminator="\n")
         writer.writerow(
             [
                 "video_id",
