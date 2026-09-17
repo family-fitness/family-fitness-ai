@@ -1,376 +1,160 @@
-"""측정값 하나를 점수와 분포상 위치로 바꾼다.
-
-원자료를 읽지 않는다. `data/release/` 의 산출물만으로 돈다 — 서비스가 기동 시
-한 번 올려두고 요청마다 조회·보간만 하는 형태를 그대로 옮긴 것이다.
-
-실행 (저장소 루트에서):
-    python -m family_fitness_ai.stats.assess --age 11 --sex F \\
-        --measure 028=52.3 --measure 012=12.6 --measure 020=66
-"""
+"""측정값 → 요인별 점수. 측정값이 없어도 200 이다."""
 
 from __future__ import annotations
 
-import argparse
-import json
-import unicodedata
-from dataclasses import asdict, dataclass, field
-from pathlib import Path
+from dataclasses import dataclass
+from typing import Any
 
-import numpy as np
-import pandas as pd
-
-from ..common.types import Band, FitnessFactor
-from . import criteria as C
-from . import grade as G
-from .items import ITEMS
-from .score import Anchors, score
-
-DEFAULT_RELEASE = Path("data/release")
-BAND_STRENGTH, BAND_GROWTH = 75, 25
-CRITERIA_FILE = "grade_thresholds.csv"
-BODY_RANGES_FILE = "body_composition_ranges.csv"
-GRADE_DIST_FILE = "age_band_grade_distribution.csv"
+from family_fitness_ai.common import copy as words
+from family_fitness_ai.common.items import (
+    BODY_ITEMS,
+    ITEMS,
+    age_group_of,
+    item_label,
+    scored_items,
+)
+from family_fitness_ai.stats import tables
 
 
 @dataclass(frozen=True)
-class Cell:
-    """한 (연령대, 구간, 성별, 항목) 칸의 채점 재료."""
-
-    age_group: str
-    age_lo: int
-    age_hi: int
+class Profile:
+    profile_ref: str
+    age: int
     age_unit: str
     sex: str
-    item_code: str
-    n: int
-    anchors: Anchors
-    quantiles: np.ndarray  # 원값 p1~p99. 경험분포를 되살린다
-    score_bins: np.ndarray  # 점수 10구간 비율
+    height_cm: float | None = None
+    weight_kg: float | None = None
+    measurements: dict[str, float] | None = None
+
+    @property
+    def age_group(self) -> str:
+        return age_group_of(self.age, self.age_unit)
+
+    @property
+    def values(self) -> dict[str, float]:
+        return self.measurements or {}
+
+    @property
+    def input_level(self) -> str:
+        if self.values:
+            return "L2"
+        if self.height_cm is not None and self.weight_kg is not None:
+            return "L1"
+        return "L0"
 
 
-class Reference:
-    """산출물 묶음. 기동 시 한 번 만들고 재사용한다."""
+def _with_body(profile: Profile) -> dict[str, float]:
+    """등급 판정용 값. 키·몸무게만 있으면 BMI 는 우리가 낸다."""
+    values = dict(profile.values)
+    if "018" not in values and profile.height_cm and profile.weight_kg:
+        metres = profile.height_cm / 100
+        values["018"] = round(profile.weight_kg / (metres * metres), 2)
+    if "042" not in values and "004" in values and profile.height_cm:
+        values["042"] = round(values["004"] / profile.height_cm, 3)
+    return values
 
-    def __init__(self, release_dir: str | Path = DEFAULT_RELEASE) -> None:
-        root = Path(release_dir).expanduser()
-        missing = [
-            name
-            for name in (
-                "age_band_score_summary.csv",
-                "age_band_score_distribution.csv",
-                "age_band_value_quantiles.csv",
-            )
-            if not (root / name).exists()
-        ]
-        if missing:
-            raise FileNotFoundError(f"산출물이 없다: {root} — {', '.join(missing)}")
 
-        # 문턱은 등급 판정이 쓴다 (docs/02). 없으면 점수만 낸다.
-        criteria_path = root / CRITERIA_FILE
-        self.thresholds: list[C.Threshold] = C.load(criteria_path) if criteria_path.exists() else []
-        # 신체조성은 3등급 판정에만 쓴다. 응답에 수치로 나가지 않는다 (docs/02 §3).
-        body_path = root / BODY_RANGES_FILE
-        self.body_ranges: list[C.BodyRange] = (
-            C.load_body_ranges_csv(body_path) if body_path.exists() else []
+def factor_rows(profile: Profile) -> tuple[list[dict[str, Any]], bool]:
+    """요인별 한 줄씩. 두 번째 값은 표본이 모자란 칸이 있었는지다."""
+    age_group = profile.age_group
+    rows: list[dict[str, Any]] = []
+    low_sample = False
+
+    for code in scored_items(age_group, profile.values):
+        item = ITEMS[code]
+        value = float(profile.values[code])
+        sample = tables.peer(age_group, profile.sex, profile.age, code)
+
+        if sample is None or not sample.enough:
+            low_sample = True
+            score = percentile = band = None
+            n = sample.n if sample else 0
+        else:
+            percentile = tables.percentile_of(sample, value, item.lower_is_better)
+            score = tables.score_of(sample, value, item.lower_is_better)
+            band = words.band_of(percentile)
+            n = sample.n
+
+        rows.append(
+            {
+                "factor": item.factor,
+                "item_code": code,
+                "item_name": item.name,
+                "item_label": item_label(code, age_group),
+                "unit": item.unit,
+                "value": value,
+                "score": score,
+                "percentile": percentile,
+                "band": band,
+                "n": n,
+            }
         )
+    return rows, low_sample
 
-        # 또래 등급 분포. `peer_distribution` 은 측정값이 없어도 나가므로 (docs/03 §3)
-        # 점수 산출물과 함께 올려 둔다.
-        dist_path = root / GRADE_DIST_FILE
-        self._peer: dict[tuple[str, int, str], list[tuple[str, float]]] = {}
-        if dist_path.exists():
-            peers = pd.read_csv(dist_path, encoding="utf-8-sig")
-            for key, group in peers.groupby(["age_group", "age_lo", "sex"]):
-                ag, lo, sx = key
-                self._peer[(str(ag), int(lo), str(sx))] = [
-                    (str(r.grade), float(r.ratio)) for r in group.itertuples()
-                ]
 
-        summary = pd.read_csv(root / "age_band_score_summary.csv", encoding="utf-8-sig")
-        summary = summary[summary["status"] == "ok"]
-        dist = pd.read_csv(root / "age_band_score_distribution.csv", encoding="utf-8-sig")
-        quant = pd.read_csv(root / "age_band_value_quantiles.csv", encoding="utf-8-sig")
-        qcols = [c for c in quant.columns if c.startswith("q")]
-
-        bins = {
-            k: g.sort_values("bin_lo")["ratio"].to_numpy(float)
-            for k, g in dist.groupby(["age_group", "age_lo", "sex", "item_code"])
-        }
-        quants = {
-            (r.age_group, r.age_lo, r.sex, r.item_code): np.sort(
-                np.array([getattr(r, c) for c in qcols], dtype=float)
-            )
-            for r in quant.itertuples()
-        }
-
-        self._cells: dict[tuple[str, int, str, str], Cell] = {}
-        self._bands: dict[str, list[tuple[int, int]]] = {}
-        for r in summary.itertuples():
-            code = f"{int(r.item_code):03d}"
-            key = (r.age_group, int(r.age_lo), r.sex, int(r.item_code))
-            xs, ys = [], []
-            for y in (0, 40, 60, 80, 100):
-                x = getattr(r, f"anchor_{y}")
-                if pd.notna(x) and x != "":
-                    xs.append(float(x))
-                    ys.append(float(y))
-            self._cells[(r.age_group, int(r.age_lo), r.sex, code)] = Cell(
-                age_group=r.age_group,
-                age_lo=int(r.age_lo),
-                age_hi=int(r.age_hi),
-                age_unit=r.age_unit,
-                sex=r.sex,
-                item_code=code,
-                n=int(r.n),
-                anchors=Anchors(x=tuple(xs), y=tuple(ys), method=r.method),
-                quantiles=quants[key],
-                score_bins=bins[key],
-            )
-            self._bands.setdefault(r.age_group, [])
-            if (int(r.age_lo), int(r.age_hi)) not in self._bands[r.age_group]:
-                self._bands[r.age_group].append((int(r.age_lo), int(r.age_hi)))
-
-    def age_group_of(self, age: int, age_unit: str) -> str | None:
-        """연령대는 산출물의 구간에서 되찾는다. 코드에 경계를 박아 두지 않는다."""
-        for group, bands in self._bands.items():
-            unit = "개월" if group == "유아기" else "세"
-            if unit == age_unit and any(lo <= age <= hi for lo, hi in bands):
-                return group
+def _pick(rows: list[dict[str, Any]], *, lowest: bool) -> dict[str, Any] | None:
+    graded = [row for row in rows if row["percentile"] is not None]
+    if not graded:
         return None
-
-    def band_of(self, age_group: str, age: int) -> tuple[int, int] | None:
-        for lo, hi in self._bands.get(age_group, []):
-            if lo <= age <= hi:
-                return (lo, hi)
-        return None
-
-    def cell(self, age_group: str, age: int, sex: str, item_code: str) -> Cell | None:
-        band = self.band_of(age_group, age)
-        return self._cells.get((age_group, band[0], sex, item_code)) if band else None
-
-    def peer_distribution(self, age_group: str, age: int, sex: str) -> list[tuple[str, float]]:
-        """그 칸의 등급 구성비. 없으면 빈 목록이다 — 없는 것을 지어내지 않는다."""
-        band = self.band_of(age_group, age)
-        return self._peer.get((age_group, band[0], sex), []) if band else []
-
-    def items_of(self, age_group: str, age: int, sex: str) -> list[str]:
-        band = self.band_of(age_group, age)
-        if not band:
-            return []
-        return sorted(c for (g, lo, s, c) in self._cells if (g, lo, s) == (age_group, band[0], sex))
+    return (min if lowest else max)(graded, key=lambda row: int(row["percentile"]))
 
 
-@dataclass(frozen=True)
-class FactorScore:
-    factor: FitnessFactor
-    item_code: str
-    item_name: str
-    unit: str
-    value: float
-    score: float
-    percentile: int
-    band: Band
-    n: int
+def assessment(profile: Profile) -> dict[str, Any]:
+    age_group = profile.age_group
+    rows, low_sample = factor_rows(profile)
+
+    focus = _pick(rows, lowest=True)
+    best = _pick(rows, lowest=False)
+
+    # 측정값이 없으면 요인을 지목하지 않는다. 근거 없이 고른 요인에는 인용할
+    # 것이 없다.
+    child_scope: dict[str, Any] = {"focus_one": None}
+    parent_copy: dict[str, str] = {}
+    if focus is not None:
+        factor = str(focus["factor"])
+        child_scope = {"focus_one": {"factor": factor, "copy": words.FOCUS_COPY[factor]}}
+        parent_copy["focus"] = words.factor_copy(factor, str(focus["band"]))
+    if best is not None:
+        parent_copy["strength"] = words.factor_copy(str(best["factor"]), str(best["band"]))
+
+    values = _with_body(profile)
+    grade = tables.certify(age_group, profile.sex, profile.age, values) if rows else None
+
+    return {
+        "input_level": profile.input_level,
+        "age_group": age_group,
+        "child_scope": child_scope,
+        "parent_scope": {
+            "grade": grade,
+            "peer_distribution": tables.grade_distribution(age_group, profile.sex, profile.age),
+            "factors": rows,
+            "copy": parent_copy,
+        },
+        "low_sample": low_sample,
+        "disclaimer": words.DISCLAIMER,
+    }
 
 
-@dataclass(frozen=True)
-class Assessment:
-    age_group: str | None
-    sex: str
-    band: tuple[int, int] | None = None
-    input_level: str = "L1"
-    low_sample: bool = False
-    factors: list[FactorScore] = field(default_factory=list)
-    focus_one: str | None = None
-    not_scored: list[str] = field(default_factory=list)
-    body_composition: list[str] = field(default_factory=list)
-    note: str | None = None
-    grade: str | None = None
-    grade_summary: str | None = None
+def trajectory(profile: Profile, item_code: str = "028", horizon_years: int = 10) -> dict[str, Any]:
+    """또래 집단이 나이를 따라 보이는 분포. 개인의 미래가 아니다."""
+    step = 12 if profile.age_unit == "개월" else 1
+    ages = [profile.age + step * year for year in range(horizon_years + 1)]
 
+    bands: list[dict[str, Any]] = []
+    for age in ages:
+        group = age_group_of(age, profile.age_unit)
+        bands.extend(tables.trajectory_bands(group, profile.sex, item_code, [age]))
 
-def score_one(cell: Cell, value: float) -> FactorScore:
-    """원값 하나를 점수·백분위·밴드로. 경험분포는 분위수 표에서 되살린다."""
-    item = ITEMS[cell.item_code]
-    s = float(
-        score(
-            np.array([value]),
-            cell.anchors,
-            cell.quantiles,
-            lower_is_better=item.lower_is_better,
-        )[0]
-    )
-    # 백분위는 원값 분위수에서 바로 구한다. 점수 히스토그램(10점 구간)을 거치면
-    # 사람이 몰린 구간에서 최대 16%p 까지 뭉개진다.
-    ordered = cell.quantiles if not item.lower_is_better else -cell.quantiles[::-1]
-    probe = value if not item.lower_is_better else -value
-    below = float(np.searchsorted(ordered, probe, side="right")) / ordered.size * 100
-    percentile = int(round(below))
-    band: Band = (
-        "strength"
-        if percentile >= BAND_STRENGTH
-        else ("growth" if percentile < BAND_GROWTH else "steady")
-    )
-    return FactorScore(
-        factor=item.factor,
-        item_code=cell.item_code,
-        item_name=item.name,
-        unit=item.unit,
-        value=value,
-        score=round(s, 1),
-        percentile=percentile,
-        band=band,
-        n=cell.n,
-    )
+    item = ITEMS.get(item_code)
+    name = item.name if item else BODY_ITEMS.get(item_code, (item_code, ""))[0]
+    unit = item.unit if item else BODY_ITEMS.get(item_code, ("", ""))[1]
 
-
-def assess(
-    ref: Reference, *, age: int, age_unit: str, sex: str, measurements: dict[str, float]
-) -> Assessment:
-    age_group = ref.age_group_of(age, age_unit)
-    if age_group is None:
-        return Assessment(age_group=None, sex=sex, note="점수를 낼 수 있는 연령 구간이 아니다")
-
-    factors: list[FactorScore] = []
-    skipped: list[str] = []
-    body: list[str] = []
-    for code, value in measurements.items():
-        # 신체조성은 점수화하지 않지만 등급 판정에는 쓴다 (docs/02 §5.2 vs §5.4).
-        # "기준항목이 아니다" 로 묶으면 쓰이지 않은 것처럼 읽힌다.
-        if code in G.BODY_COMPOSITION:
-            body.append(code)
-            continue
-        cell = ref.cell(age_group, age, sex, code)
-        if cell is None:
-            skipped.append(code)
-            continue
-        factors.append(score_one(cell, value))
-    factors.sort(key=lambda f: -f.score)
-    # 등급은 점수와 따로 낸다 — 항목 AND 조건이라 요인 점수로 대신할 수 없다.
-    verdict = (
-        G.judge(
-            ref.thresholds,
-            age_group=age_group,
-            age=age,
-            sex=sex,
-            measurements=measurements,
-            body_ranges=ref.body_ranges,
-        )
-        if ref.thresholds
-        else G.GradeResult(grade=None)
-    )
-    return Assessment(
-        age_group=age_group,
-        sex=sex,
-        band=ref.band_of(age_group, age),
-        input_level="L2" if factors else "L1",
-        low_sample=any(f.n < 30 for f in factors),
-        factors=factors,
-        focus_one=factors[-1].factor if factors else None,
-        not_scored=skipped,
-        body_composition=body,
-        grade=verdict.grade,
-        grade_summary=verdict.summary(),
-    )
-
-
-def _width(text: str) -> int:
-    """터미널에서 차지하는 칸 수. 한글·전각은 두 칸이다.
-
-    `f"{text:<9}"` 는 **문자 수**로 세기 때문에 한글이 섞이면 표가 어긋난다.
-    """
-    return sum(2 if unicodedata.east_asian_width(c) in "WF" else 1 for c in text)
-
-
-def _pad(text: str, width: int, *, right: bool = False) -> str:
-    fill = " " * max(0, width - _width(text))
-    return fill + text if right else text + fill
-
-
-def table(factors: list[FactorScore]) -> list[str]:
-    """요인 표를 줄 목록으로. 열 너비는 내용에서 정한다 — 항목명 길이가 연령대마다
-    다르고(`앉아윗몸앞으로굽히기` 대 `상대악력`), 고정 폭으로는 어느 한쪽이 깨진다.
-    """
-    if not factors:
-        return []
-    headers = ("요인", "항목", "값", "점수", "또래 상위", "밴드")
-    right = (False, False, True, True, True, False)
-    rows = [
-        (
-            f.factor,
-            f.item_name,
-            f"{f.value:g}",
-            f"{f.score:.1f}",
-            f"{100 - f.percentile}%",
-            f.band,
-        )
-        for f in factors
-    ]
-    widths = [max(_width(h), *(_width(r[i]) for r in rows)) for i, h in enumerate(headers)]
-    gap = "  "
-
-    def line(cells: tuple[str, ...]) -> str:
-        joined = gap.join(_pad(c, w, right=r) for c, w, r in zip(cells, widths, right, strict=True))
-        return joined.rstrip()  # 마지막 열의 오른쪽 여백은 남기지 않는다
-
-    rule = "-" * (sum(widths) + len(gap) * (len(widths) - 1))
-    return [line(headers), rule, *(line(row) for row in rows)]
-
-
-def _measure(text: str) -> tuple[str, float]:
-    code, _, value = text.partition("=")
-    return code.strip(), float(value)
-
-
-def main(argv: list[str] | None = None) -> int:
-    ap = argparse.ArgumentParser(description="측정값을 점수와 분포상 위치로 바꾼다")
-    ap.add_argument("--age", type=int, required=True, help="나이. 유아기는 개월 수")
-    ap.add_argument("--age-unit", default="세", choices=["세", "개월"])
-    ap.add_argument("--sex", required=True, choices=["M", "F"])
-    ap.add_argument(
-        "--measure",
-        action="append",
-        default=[],
-        metavar="코드=값",
-        help="예: --measure 028=52.3 (여러 번 쓴다)",
-    )
-    ap.add_argument("--release", default=str(DEFAULT_RELEASE), help="산출물 디렉터리")
-    ap.add_argument("--json", action="store_true", help="사람이 읽는 표 대신 JSON")
-    args = ap.parse_args(argv)
-
-    ref = Reference(args.release)
-    result = assess(
-        ref,
-        age=args.age,
-        age_unit=args.age_unit,
-        sex=args.sex,
-        measurements=dict(_measure(m) for m in args.measure),
-    )
-    if args.json:
-        print(json.dumps(asdict(result), ensure_ascii=False, indent=2))
-        return 0
-
-    if result.age_group is None or result.band is None:
-        print(result.note or "점수를 낼 수 없다")
-        return 1
-
-    lo, hi = result.band
-    sex_ko = "여" if args.sex == "F" else "남"
-    print(f"{result.age_group} · {sex_ko} · {args.age}{args.age_unit}   기준 구간 {lo}~{hi}")
-    print()
-    for line in table(result.factors):
-        print("  " + line)
-    print(f"\n  {result.grade_summary or '등급 판정 불가'}")
-    if result.focus_one:
-        print(f"  대상 요인 {result.focus_one}")
-    if result.body_composition:
-        print(f"  신체조성은 등급 판정에만 쓴다: {', '.join(sorted(result.body_composition))}")
-    if result.not_scored:
-        print(f"  이 구간의 기준항목이 아니다: {', '.join(result.not_scored)}")
-    if result.low_sample:
-        print("  표본이 30 미만인 칸이 있다 (low_sample)")
-    return 0
-
-
-if __name__ == "__main__":
-    raise SystemExit(main())
+    return {
+        "basis": "cross_sectional_group_distribution",
+        "item_code": item_code,
+        "item_name": name,
+        "unit": unit,
+        "bands": bands,
+        "notice": words.TRAJECTORY_NOTICE,
+        "low_sample": any(int(band["n"]) < tables.MIN_SAMPLE for band in bands) or not bands,
+    }
