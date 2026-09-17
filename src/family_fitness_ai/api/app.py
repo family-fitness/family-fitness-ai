@@ -11,6 +11,7 @@ import logging
 from fastapi import APIRouter, FastAPI, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
+from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from family_fitness_ai.api.schemas import (
     MessageIn,
@@ -35,6 +36,27 @@ v1 = APIRouter(prefix="/v1")
 @app.exception_handler(ApiError)
 async def _api_error(_: Request, error: ApiError) -> JSONResponse:
     return JSONResponse(status_code=error.status, content=error.body())
+
+
+#: FastAPI 가 스스로 내는 오류의 코드 이름. 우리가 던진 것이 아니어도 나가는
+#: 모양은 같아야 한다 — 호출하는 쪽이 error.code 하나로 분기할 수 있게.
+_STATUS_CODES = {404: "NOT_FOUND", 405: "METHOD_NOT_ALLOWED"}
+
+
+@app.exception_handler(StarletteHTTPException)
+async def _http_error(request: Request, error: StarletteHTTPException) -> JSONResponse:
+    code = _STATUS_CODES.get(
+        error.status_code, "BAD_REQUEST" if error.status_code < 500 else "TEMPORARILY_UNAVAILABLE"
+    )
+    if error.status_code == 405:
+        message = f"{request.method} {request.url.path} 는 받지 않습니다"
+    elif error.status_code == 404:
+        message = f"그런 경로가 없습니다: {request.url.path}"
+    else:
+        message = str(error.detail)
+    return JSONResponse(
+        status_code=error.status_code, content={"error": {"code": code, "message": message}}
+    )
 
 
 @app.exception_handler(RequestValidationError)

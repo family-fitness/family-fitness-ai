@@ -172,6 +172,21 @@ def test_a_second_run_for_the_same_profile_is_refused_while_one_is_running():
     _wait(first.json()["run_id"])
 
 
+def test_every_failure_wears_the_same_shape():
+    """FastAPI 가 스스로 내는 오류도 우리 모양으로 나가야 한다.
+
+    호출하는 쪽이 error.code 하나로 분기한다. 여기서만 detail 로 나가면 그
+    분기가 뚫린다. run_id 를 비워 부르면 실제로 이 길로 온다.
+    """
+    missing = client.get("/v1/coach/nothing")
+    assert missing.status_code == 404
+    assert missing.json()["error"]["code"] == "NOT_FOUND"
+
+    wrong_method = client.get("/v1/coach/runs")
+    assert wrong_method.status_code == 405
+    assert wrong_method.json()["error"]["code"] == "METHOD_NOT_ALLOWED"
+
+
 def test_an_unknown_run_is_a_404():
     response = client.get("/v1/coach/runs/cr_없는것")
     assert response.status_code == 404
