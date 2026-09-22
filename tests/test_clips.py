@@ -77,6 +77,40 @@ def test_narration_that_never_settles_is_not_a_name():
     assert clips_of_video("vid", noisy) == []
 
 
+# ── 이름표 칸 (성인 4주 프로그램) ────────────────────────────────────────────
+# 이 영상들은 운동 이름을 왼쪽 아래 흰 상자에 잠깐 띄우고 치운다. 그 자리를 따로
+# 읽어 둔 것(video.ocr → screen_name.jsonl)을 잘라 두었다 — 1주차 150~350초.
+
+
+def test_name_card_names_come_through():
+    names = [clip.name for clip in clips("name_card")]
+    assert names[1:5] == ["제자리 걷기", "가볍게 달리기", "무릎 스트레칭", "엉덩관절 스트레칭"]
+
+
+def test_a_short_card_is_still_a_name():
+    """「가볍게 달리기」 이름표는 10초만 뜬다. 잡음 문턱에 걸려 버려지면 안 된다."""
+    assert "가볍게 달리기" in [clip.name for clip in clips("name_card")]
+
+
+def test_a_card_runs_until_the_next_card():
+    """이름표는 금방 치워지지만 운동은 다음 이름표까지 이어진다. 빈틈이 없어야 한다."""
+    found = clips("name_card")
+    for before, after in zip(found, found[1:], strict=False):
+        assert before.end_sec == after.start_sec
+
+
+def test_caution_cards_are_not_exercises():
+    """「주의사항 …」 카드는 이름표 자리에 뜨지만 운동이 아니다."""
+    assert not any(clip.name.startswith("주의사항") for clip in clips("name_card"))
+
+
+def test_names_sharing_a_prefix_stay_apart():
+    """「엉덩관절 스트레칭」과 「엉덩관절, 어깨 스트레칭」은 80% 넘게 겹치는 다른 운동이다."""
+    names = [clip.name for clip in clips("name_card")]
+    assert "엉덩관절 스트레칭" in names
+    assert "엉덩관절, 어깨 스트레칭" in names
+
+
 def test_ocr_wobble_merges_but_different_names_do_not():
     from family_fitness_ai.video.clips import _same_reading
 

@@ -82,7 +82,9 @@ def clips() -> tuple[Clip, ...]:
                     name=row["name_on_video"],
                     exercise_name=label.get("exercise_name", ""),
                     fitness_factor=label.get("fitness_factor", ""),
-                    phase=label.get("phase") or row["phase_on_video"] or "본운동",
+                    # 영상이 화면에 띄운 단계를 먼저 믿는다. 같은 스트레칭이 준비운동에도
+                    # 정리운동에도 나오는데, 라벨 표는 이름당 한 단계라 그걸 못 담는다.
+                    phase=row["phase_on_video"] or label.get("phase") or "본운동",
                     start_sec=int(row["start_sec"]),
                     end_sec=int(row["end_sec"]),
                     age_group=video.age_group if video else "",

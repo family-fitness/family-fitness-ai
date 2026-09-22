@@ -34,6 +34,15 @@ from typing import Any
 from family_fitness_ai.common.settings import ROOT, settings
 
 SCREEN = "youtube/screen.jsonl"
+#: 제목·자막 칸에 이름이 안 걸리는 영상만 이름표 자리를 따로 읽어 둔 것 (video.ocr).
+SCREEN_NAME = "youtube/screen_name.jsonl"
+#: 이름표 자리에 뜨지만 운동 이름이 아닌 것. 뒤에 설명이 붙어 읽히므로 앞머리로 본다.
+_NOT_NAMES = ("주의사항", "운동의 효과", "운동방법")
+#: 이름표는 일부러 띄운 표지라 잡음보다 짧게 떠도 이름이다 (2초 간격이니 4칸 = 8초).
+CARD_MIN_RUN = 4
+#: 이름표가 사라져도 운동은 다음 이름표까지 이어진다. 다만 이만큼 넘게 아무 표지가
+#: 없으면 쉬는 시간이나 끝인사로 보고 더 잇지 않는다.
+CARD_CARRY_FRAMES = 60
 
 #: 워터마크와 OCR 부스러기. 「국민체력100」이 프레임마다 다르게 읽힌다.
 _JUNK = re.compile(
@@ -139,7 +148,51 @@ def read_screens(raw_dir: Path) -> dict[str, dict]:
                 value = ast.literal_eval(value)
             if "boxes" in value or row["key"] not in best:
                 best[row["key"]] = value
+
+    # 이름표 칸을 따로 읽어 둔 영상은 같은 시각의 프레임에 name 을 붙인다.
+    sidecar = raw_dir / SCREEN_NAME
+    if sidecar.exists():
+        for line in sidecar.read_text(encoding="utf-8").splitlines():
+            row = json.loads(line)
+            screen = best.get(row["key"])
+            if screen is None:
+                continue
+            names = {frame["t"]: frame["name"] for frame in row["value"]["frames"]}
+            for frame in screen["frames"]:
+                frame["name"] = names.get(frame["t"], [])
     return best
+
+
+def _name_card(frame: dict) -> str:
+    """이름표 칸의 글자 → 운동 이름 하나.
+
+    이름표는 「한글 이름 / (영문 이름) / 1. 동작 설명…」 순으로 쌓인다. 한글 이름이
+    두 줄로 접힐 때가 있어(「등, 허리, 무릎 / 스트레칭」) 영문 줄이나 번호 줄이
+    나오기 전까지를 이어 붙인다.
+    """
+    lines = []
+    for text in frame.get("name") or []:
+        text = _tidy(str(text))
+        if text.startswith("(") or re.match(r"^\d+\s*[.)]", text):
+            break
+        if not re.search(r"[가-힣]", text):
+            continue
+        lines.append(text)
+    name = " ".join(lines).strip()
+    return "" if name.startswith(_NOT_NAMES) else name
+
+
+def _carried(names: list[str], limit: int) -> list[str]:
+    """이름표가 사라진 칸을 앞 이름으로 잇는다. 다음 이름표가 뜨면 거기서 끊긴다."""
+    out = list(names)
+    last, since = "", 0
+    for i, name in enumerate(out):
+        if name:
+            last, since = name, 0
+        elif last and since < limit:
+            since += 1
+            out[i] = last
+    return out
 
 
 def _runs_of(sequence: list[str]) -> collections.Counter[str]:
@@ -239,12 +292,25 @@ def clips_of_video(video_id: str, screen: dict) -> list[Clip]:
             names -= {n for n in names if shares[n] >= BANNER_SHARE * total}
         sources[field] = _filled([name if name in names else "" for name in picked])
 
+    # 이름표 칸을 따로 읽은 영상이면 그쪽이 가장 정확하다 — 그 자리만 보라고 읽은 것이다.
+    cards = [_name_card(frame) for frame in frames]
+    if any(cards):
+        card_counts = collections.Counter(name for name in cards if name)
+        card_canon = _canonical(card_counts)
+        cards = [card_canon[name] if name else "" for name in cards]
+        card_runs = _runs_of(cards)
+        cards = [name if name and card_runs[name] >= CARD_MIN_RUN else "" for name in cards]
+        # 이름표에서 다음 이름표까지가 한 운동이다.
+        cards = _carried(cards, CARD_CARRY_FRAMES)
+
     titles, bars = sources["texts"], sources["bar"]
     distinct_title = len({n for n in titles if n})
     distinct_bar = len({n for n in bars if n})
     # 제목 칸이 프로그램 이름만 물고 있는 영상이 있다. 그럴 때는 자막 칸의 보라색
     # 이름표가 유일한 단서다 — 이름이 훨씬 많이 나오는 쪽을 믿는다.
     picked = bars if distinct_bar >= max(3, 2 * distinct_title) else titles
+    if len({name for name in cards if name}) >= 3:
+        picked = cards
     phases = _phases(seen)
 
     spans: list[list[Any]] = []
