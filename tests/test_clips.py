@@ -75,3 +75,10 @@ def test_narration_that_never_settles_is_not_a_name():
         "frames": [{"t": t, "texts": [], "bar": [f"해설 {t}"]} for t in range(0, 60, 2)],
     }
     assert clips_of_video("vid", noisy) == []
+
+
+def test_ocr_wobble_merges_but_different_names_do_not():
+    from family_fitness_ai.video.clips import _same_reading
+
+    assert _same_reading("주의사항 동작 시 호를", "주의사항 동작 시 호류")  # 한 글자 흔들림
+    assert not _same_reading("어깨 스트레칭", "어깨, 등 스트레칭")  # 다른 운동

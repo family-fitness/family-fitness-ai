@@ -43,6 +43,8 @@ _JUNK = re.compile(
     r"|^[A-Za-z0-9\W]{1,5}$"
 )
 _PHASE = re.compile(r"(준비\s*운동|본\s*운동|정리\s*운동|마무리\s*운동|쿨\s*다운)")
+#: 화면에 뜨는 단계 이름을 편성이 아는 셋으로 모은다. 영상마다 부르는 말이 다르다.
+_PHASE_NAMES = {"마무리운동": "정리운동", "쿨다운": "정리운동"}
 
 #: 영상 내내 떠 있으면 배너다.
 BANNER_SHARE = 0.85
@@ -96,6 +98,22 @@ def _pieces(frame: dict, field: str) -> list[str]:
     return out
 
 
+#: OCR 이 흔들려 달라지는 것은 한두 글자다(「호를」·「호류」, 「영덩이」·「엉덩이」).
+#: 길이가 이보다 많이 다르면 흔들림이 아니라 다른 이름이다.
+_OCR_SLACK = 2
+
+
+def _same_reading(a: str, b: str) -> bool:
+    """같은 글자를 OCR 이 다르게 읽은 것인가.
+
+    겹치는 비율만 보면 앞머리가 같은 다른 운동이 합쳐진다 — 「어깨 스트레칭」과
+    「어깨, 등 스트레칭」은 80% 넘게 겹치지만 다른 이름표다. 길이 차이도 같이 본다.
+    """
+    if abs(len(a) - len(b)) > _OCR_SLACK:
+        return False
+    return difflib.SequenceMatcher(None, a, b).ratio() >= 0.8
+
+
 def _canonical(counts: collections.Counter[str]) -> dict[str, str]:
     """OCR 이 흔들린 글자를 가장 많이 나온 꼴로 모은다.
 
@@ -105,14 +123,7 @@ def _canonical(counts: collections.Counter[str]) -> dict[str, str]:
     canon: dict[str, str] = {}
     ordered = sorted(counts, key=lambda text: (-counts[text], text))
     for text in ordered:
-        match = next(
-            (
-                kept
-                for kept in canon.values()
-                if difflib.SequenceMatcher(None, text, kept).ratio() >= 0.8
-            ),
-            None,
-        )
+        match = next((kept for kept in canon.values() if _same_reading(text, kept)), None)
         canon[text] = match or text
     return canon
 
@@ -184,7 +195,8 @@ def _phases(seen: list[tuple[list[str], list[str]]]) -> list[str]:
     marks = []
     for titles, bars in seen:
         found = next((_PHASE.search(t) for t in titles + bars if _PHASE.search(t)), None)
-        marks.append(re.sub(r"\s+", "", found.group(0)) if found else "")
+        phase = re.sub(r"\s+", "", found.group(0)) if found else ""
+        marks.append(_PHASE_NAMES.get(phase, phase))
     out = list(marks)
     last = ""
     for i, mark in enumerate(out):
@@ -197,7 +209,7 @@ def _phases(seen: list[tuple[list[str], list[str]]]) -> list[str]:
     for i in range(len(out) - 1, -1, -1):
         if marks[i]:
             later = marks[i]
-        elif out[i] == "준비운동" and later in ("정리운동", "마무리운동"):
+        elif out[i] == "준비운동" and later == "정리운동":
             out[i] = "본운동"
     return out
 
