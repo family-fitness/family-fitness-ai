@@ -298,13 +298,17 @@ def _mission(
     copy: dict[str, str],
     reason: str,
     cheerers: list[dict[str, str]],
+    minutes: int,
 ) -> dict[str, Any]:
+    # 그날 길이는 요청한 시간이다. 화면에서 한 편을 여러 세트 반복해 채우므로
+    # 영상 길이의 합과 다르다 — 합은 video_sec 으로 따로 낸다.
     seconds = sum(int(session["duration_sec"]) for session in sessions)
     return {
         "title": title,
         "period": {"start_date": day.isoformat(), "end_date": day.isoformat()},
         "participants": [{"ref": read.profile.ref, "role": read.profile.role}] + cheerers,
-        "duration_min": max(1, round(seconds / 60)),
+        "duration_min": minutes,
+        "video_sec": seconds,
         "sessions": sessions,
         "copy": copy,
         "reason": reason,
@@ -327,6 +331,7 @@ def _by_llm(
         "조건": {
             "주당_횟수": constraints.days_per_week,
             "한번_분": constraints.minutes_per_session,
+            "단계별_편수": catalog.clip_counts(constraints.minutes_per_session),
             "요일_자리": list(slots),
             "조용히": constraints.quiet,
             "좁은_공간": constraints.small_space,
@@ -350,7 +355,11 @@ def _by_llm(
             }
             for key, clip in ids.items()
         ],
-        "요청": "요일_자리마다 하루치를 짠다. day_offset 은 그 자리 값이다.",
+        "요청": (
+            "요일_자리마다 하루치를 짠다. day_offset 은 그 자리 값이다. "
+            "단계별_편수만큼만 고른다 — 화면에서 한 편을 여러 세트 반복해 시간을 "
+            "채우므로 영상 길이의 합을 한번_분에 맞출 필요가 없다."
+        ),
     }
 
     days = coach_llm.plan_week(payload)
@@ -364,14 +373,26 @@ def _by_llm(
             continue
         chosen: list[tuple[str, catalog.Clip]] = []
         seen: set[str] = set()
+        # 단계마다 정해진 수만큼만 받는다. 시키는 것으로는 모자라서, 더 고르면
+        # 여기서 자른다.
+        want = catalog.clip_counts(constraints.minutes_per_session)
+        taken: dict[str, int] = dict.fromkeys(catalog.PHASES, 0)
         for row in day_plan.get("clips") or []:
             clip = ids.get(str(row.get("id")))
             if clip is None or clip.title in seen:
                 continue  # 목록에 없는 id 는 버린다
+            phase = str(row.get("phase") or clip.phase)
+            if taken.get(phase, 0) >= want.get(phase, 0):
+                continue
             seen.add(clip.title)
-            chosen.append((str(row.get("phase") or clip.phase), clip))
+            taken[phase] = taken.get(phase, 0) + 1
+            chosen.append((phase, clip))
         if not chosen:
             continue
+        # 계약은 준비 → 본 → 정리 차례다. LLM 이 준 차례가 그 순서라는 보장이 없다.
+        chosen.sort(
+            key=lambda pair: catalog.PHASES.index(pair[0]) if pair[0] in catalog.PHASES else 1
+        )
         sessions = _sessions_from(chosen, read.factor, evidence_base, citations)
         day = start_date + timedelta(days=offset)
         missions.append(
@@ -386,6 +407,7 @@ def _by_llm(
                 },
                 str(day_plan.get("reason") or ""),
                 cheerers,
+                constraints.minutes_per_session,
             )
         )
     return missions or None
@@ -431,6 +453,7 @@ def _by_rule(
                 dict(copy),
                 reason,
                 cheerers,
+                constraints.minutes_per_session,
             )
         )
     return missions

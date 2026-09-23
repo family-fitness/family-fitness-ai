@@ -116,3 +116,16 @@ def test_ocr_wobble_merges_but_different_names_do_not():
 
     assert _same_reading("주의사항 동작 시 호를", "주의사항 동작 시 호류")  # 한 글자 흔들림
     assert not _same_reading("어깨 스트레칭", "어깨, 등 스트레칭")  # 다른 운동
+
+
+# ── 한 회에 몇 편을 담나 ────────────────────────────────────────────────────
+# 화면에서 한 편을 여러 세트 반복해 시간을 채운다. 우리는 가짓수를 낸다.
+
+
+def test_clip_counts_grow_with_the_session_but_stay_followable():
+    from family_fitness_ai.video.catalog import clip_counts
+
+    assert sum(clip_counts(15).values()) == 7
+    assert clip_counts(15) == {"준비운동": 2, "본운동": 4, "정리운동": 1}
+    assert sum(clip_counts(10).values()) < sum(clip_counts(30).values())
+    assert sum(clip_counts(60).values()) <= 12
