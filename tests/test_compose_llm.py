@@ -118,3 +118,61 @@ def test_falling_back_to_rules_is_said_out_loud(monkeypatch: pytest.MonkeyPatch)
     assert result.proposal is not None
     assert result.steps[2].status == "partial"
     assert "규칙" in result.steps[2].summary
+
+
+# ── 일간과 주간 ────────────────────────────────────────────────────────────
+
+
+def _family():
+    mom = compose.RunProfile(ref="mom", role="동반자", age=41, age_unit="세", sex="F")
+    return [CHILD, mom]
+
+
+def test_weekly_mission_covers_the_week_and_names_no_day():
+    """주간은 그 주 안에 아무 때나 한다. 날짜를 박지 않는다."""
+    plan = compose.build(
+        _family(),
+        date(2026, 9, 21),
+        1,
+        compose.Constraints(days_per_week=3, minutes_per_session=15, weekly_minutes=30),
+    )
+    assert plan.proposal is not None
+    kinds = [m["kind"] for m in plan.proposal["missions"]]
+    assert kinds.count("일간") == 3
+    assert kinds.count("주간") == 1
+
+    weekly = next(m for m in plan.proposal["missions"] if m["kind"] == "주간")
+    assert weekly["period"] == {"start_date": "2026-09-21", "end_date": "2026-09-27"}
+    assert weekly["duration_min"] == 30
+
+
+def test_the_companion_joins_the_weekly_not_the_daily():
+    """동반자는 제 몫을 따로 받지 않고 주간에 함께한다 — 「동반자」가 그런 뜻이다."""
+    plan = compose.build(
+        _family(),
+        date(2026, 9, 21),
+        1,
+        compose.Constraints(days_per_week=3, minutes_per_session=15, weekly_minutes=30),
+    )
+    assert plan.proposal is not None
+    for mission in plan.proposal["missions"]:
+        roles = {p["role"] for p in mission["participants"]}
+        assert roles == ({"주행자", "동반자"} if mission["kind"] == "주간" else {"주행자"})
+
+
+def test_no_weekly_when_it_is_not_asked_for():
+    plan = compose.build(_family(), date(2026, 9, 21), 1, compose.Constraints())
+    assert plan.proposal is not None
+    assert all(m["kind"] == "일간" for m in plan.proposal["missions"])
+
+
+def test_the_same_exercise_does_not_come_back_in_the_same_week():
+    plan = compose.build(
+        _family(),
+        date(2026, 9, 21),
+        1,
+        compose.Constraints(days_per_week=3, minutes_per_session=15, weekly_minutes=30),
+    )
+    assert plan.proposal is not None
+    names = [s["exercise_name"] for m in plan.proposal["missions"] for s in m["sessions"]]
+    assert len(names) == len(set(names))

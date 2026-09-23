@@ -77,8 +77,11 @@ class PeriodIn(BaseModel):
 
 
 class ConstraintsIn(BaseModel):
+    #: 일간 — 주행자가 하루에 한 번씩.
     days_per_week: Annotated[int, Field(ge=1, le=7)] = 3
     minutes_per_session: Annotated[int, Field(ge=5, le=60)] = 15
+    #: 주간 — 그 주 안에 한 번 길게, 온 가족이 함께. 비우면 만들지 않는다.
+    weekly_minutes: Annotated[int, Field(ge=5, le=90)] | None = None
     #: 아랫집이 신경 쓰이면 뛰는 동작을 뺀다.
     quiet: bool = False
     #: 거실만큼 좁은 곳에서 할 수 있는 것만.

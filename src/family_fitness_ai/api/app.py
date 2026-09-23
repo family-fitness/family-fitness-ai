@@ -164,6 +164,7 @@ def post_run(body: RunIn) -> dict[str, object]:
     constraints = Constraints(
         days_per_week=body.constraints.days_per_week,
         minutes_per_session=body.constraints.minutes_per_session,
+        weekly_minutes=body.constraints.weekly_minutes,
         quiet=body.constraints.quiet,
         small_space=body.constraints.small_space,
         no_props=body.constraints.no_props,

@@ -53,6 +53,24 @@ _WEEK_SLOTS = {
 }
 _WEEKDAYS = ("월요일", "화요일", "수요일", "목요일", "금요일", "토요일", "일요일")
 
+#: 주간 미션의 요일 자리. 날짜를 박지 않는다 — 그 주 안에 아무 때나 하는 것이다.
+WEEKLY_SLOT = -1
+
+
+@dataclass
+class Slot:
+    """미션 한 건이 놓일 자리."""
+
+    kind: str  # 일간 · 주간
+    offset: int  # 일간이면 그 주의 몇째 날, 주간이면 WEEKLY_SLOT
+    minutes: int
+    participants: list[dict[str, str]]
+
+    @property
+    def weekly(self) -> bool:
+        return self.kind == "주간"
+
+
 #: band → 또래 중 비슷한 처지의 처방 칸. 「나와 비슷한 아이들이 실제로 받은 것」.
 _BAND_GRADE = {"growth": "참가", "steady": "2", "strength": "1"}
 
@@ -89,6 +107,8 @@ class RunProfile:
 class Constraints:
     days_per_week: int = 3
     minutes_per_session: int = 15
+    #: 한 주에 한 번 길게 하는 회. None 이면 주간 미션을 만들지 않는다.
+    weekly_minutes: int | None = None
     quiet: bool = False
     small_space: bool = False
     no_props: bool = False
@@ -248,18 +268,19 @@ def _brief(read: Read) -> dict[str, Any]:
     }
 
 
-def _rule_copy(read: Read, constraints: Constraints) -> dict[str, str]:
+def _rule_copy(read: Read, constraints: Constraints, slot: Slot) -> dict[str, str]:
     child = words.FOCUS_COPY.get(read.factor, "이번 주도 몸을 움직여 볼까요")
+    if slot.weekly:
+        child = "이번 주에 한 번은 다 같이 길게 움직여 볼까요"
+    where = (
+        f"주에 한 번 {slot.minutes}분"
+        if slot.weekly
+        else f"주 {constraints.days_per_week}회 {slot.minutes}분"
+    )
     if read.factor and read.band:
-        parent = (
-            f"{words.factor_copy(read.factor, read.band)}. "
-            f"주 {constraints.days_per_week}회 {constraints.minutes_per_session}분이면 충분합니다"
-        )
+        parent = f"{words.factor_copy(read.factor, read.band)}. {where}이면 충분합니다"
     else:
-        parent = (
-            f"주 {constraints.days_per_week}회 {constraints.minutes_per_session}분으로 "
-            "짰습니다. 측정을 하면 요인을 짚어 드릴 수 있습니다"
-        )
+        parent = f"{where}으로 짰습니다. 측정을 하면 요인을 짚어 드릴 수 있습니다"
     return {"child": child, "parent": parent}
 
 
@@ -291,23 +312,28 @@ def _sessions_from(
 
 
 def _mission(
-    day: date,
-    read: Read,
+    slot: Slot,
     sessions: list[dict[str, Any]],
     title: str,
     copy: dict[str, str],
     reason: str,
-    cheerers: list[dict[str, str]],
-    minutes: int,
+    start_date: date,
+    weeks: int,
 ) -> dict[str, Any]:
-    # 그날 길이는 요청한 시간이다. 화면에서 한 편을 여러 세트 반복해 채우므로
+    # 한 회 길이는 요청한 시간이다. 화면에서 한 편을 여러 세트 반복해 채우므로
     # 영상 길이의 합과 다르다 — 합은 video_sec 으로 따로 낸다.
     seconds = sum(int(session["duration_sec"]) for session in sessions)
+    if slot.weekly:
+        # 주간은 그 주 안에 아무 때나 한다. 날짜를 박지 않는다.
+        first, last = start_date, start_date + timedelta(days=7 * weeks - 1)
+    else:
+        first = last = start_date + timedelta(days=slot.offset)
     return {
+        "kind": slot.kind,
         "title": title,
-        "period": {"start_date": day.isoformat(), "end_date": day.isoformat()},
-        "participants": [{"ref": read.profile.ref, "role": read.profile.role}] + cheerers,
-        "duration_min": minutes,
+        "period": {"start_date": first.isoformat(), "end_date": last.isoformat()},
+        "participants": slot.participants,
+        "duration_min": slot.minutes,
         "video_sec": seconds,
         "sessions": sessions,
         "copy": copy,
@@ -318,25 +344,30 @@ def _mission(
 def _by_llm(
     read: Read,
     pool: list[catalog.Clip],
-    slots: tuple[int, ...],
+    slots: list[Slot],
     constraints: Constraints,
     evidence_base: list[int],
     citations: Citations,
     start_date: date,
-    cheerers: list[dict[str, str]],
+    weeks: int,
 ) -> list[dict[str, Any]] | None:
     ids = {f"c{index}": clip for index, clip in enumerate(pool)}
     payload = {
         "참여자": _brief(read),
         "조건": {
-            "주당_횟수": constraints.days_per_week,
-            "한번_분": constraints.minutes_per_session,
-            "단계별_편수": catalog.clip_counts(constraints.minutes_per_session),
-            "요일_자리": list(slots),
             "조용히": constraints.quiet,
             "좁은_공간": constraints.small_space,
             "도구_없이": constraints.no_props,
         },
+        "자리": [
+            {
+                "day_offset": slot.offset,
+                "종류": slot.kind,
+                "분": slot.minutes,
+                "단계별_편수": catalog.clip_counts(slot.minutes),
+            }
+            for slot in slots
+        ],
         "근거": [
             {"번호": index, "내용": citations.order[index - 1].text[:400]}
             for index in evidence_base
@@ -356,9 +387,11 @@ def _by_llm(
             for key, clip in ids.items()
         ],
         "요청": (
-            "요일_자리마다 하루치를 짠다. day_offset 은 그 자리 값이다. "
-            "단계별_편수만큼만 고른다 — 화면에서 한 편을 여러 세트 반복해 시간을 "
-            "채우므로 영상 길이의 합을 한번_분에 맞출 필요가 없다."
+            "자리마다 한 회씩 짠다. day_offset 은 그 자리 값이다. "
+            f"day_offset 이 {WEEKLY_SLOT} 인 자리는 주간 미션으로, 그 주 안에 한 번 "
+            "길게 온 가족이 함께 한다 — 날짜를 정하지 않는다. "
+            "자리의 단계별_편수만큼만 고른다 — 화면에서 한 편을 여러 세트 반복해 "
+            "시간을 채우므로 영상 길이의 합을 분에 맞출 필요가 없다."
         ),
     }
 
@@ -366,48 +399,57 @@ def _by_llm(
     if not days:
         return None
 
+    by_offset = {slot.offset: slot for slot in slots}
     missions = []
+    # 한 주 안에서 같은 동작을 다시 내지 않는다. 프롬프트로도 시키지만 지켜지지
+    # 않아 한 주가 같은 차림으로 채워진 적이 있다.
+    week: set[str] = set()
     for day_plan in days:
-        offset = int(day_plan.get("day_offset", 0))
-        if offset not in slots:
+        slot = by_offset.get(int(day_plan.get("day_offset", 0)))
+        if slot is None:
             continue
-        chosen: list[tuple[str, catalog.Clip]] = []
-        seen: set[str] = set()
-        # 단계마다 정해진 수만큼만 받는다. 시키는 것으로는 모자라서, 더 고르면
-        # 여기서 자른다.
-        want = catalog.clip_counts(constraints.minutes_per_session)
-        taken: dict[str, int] = dict.fromkeys(catalog.PHASES, 0)
+        # 고른 것을 단계별로 모은다. 목록에 없는 id 는 여기서 빠진다.
+        offered: dict[str, list[catalog.Clip]] = {phase: [] for phase in catalog.PHASES}
         for row in day_plan.get("clips") or []:
             clip = ids.get(str(row.get("id")))
-            if clip is None or clip.title in seen:
-                continue  # 목록에 없는 id 는 버린다
-            phase = str(row.get("phase") or clip.phase)
-            if taken.get(phase, 0) >= want.get(phase, 0):
+            if clip is None:
                 continue
-            seen.add(clip.title)
-            taken[phase] = taken.get(phase, 0) + 1
-            chosen.append((phase, clip))
+            phase = str(row.get("phase") or clip.phase)
+            if phase in offered and clip.title not in {c.title for c in offered[phase]}:
+                offered[phase].append(clip)
+
+        # 단계마다 정해진 수만큼만 받는다. 이번 주에 안 쓴 것을 앞세우되, 그것으로
+        # 모자라면 쓴 것도 받는다 — 빈 단계로 두는 것보다 낫다.
+        want = catalog.clip_counts(slot.minutes)
+        chosen: list[tuple[str, catalog.Clip]] = []
+        seen: set[str] = set()
+        for phase in catalog.PHASES:
+            candidates = [c for c in offered[phase] if c.title not in seen]
+            fresh = [c for c in candidates if c.title not in week]
+            for clip in (fresh + [c for c in candidates if c.title in week])[: want[phase]]:
+                seen.add(clip.title)
+                chosen.append((phase, clip))
         if not chosen:
             continue
-        # 계약은 준비 → 본 → 정리 차례다. LLM 이 준 차례가 그 순서라는 보장이 없다.
-        chosen.sort(
-            key=lambda pair: catalog.PHASES.index(pair[0]) if pair[0] in catalog.PHASES else 1
-        )
+        week |= seen
         sessions = _sessions_from(chosen, read.factor, evidence_base, citations)
-        day = start_date + timedelta(days=offset)
+        if slot.weekly:
+            fallback = "이번 주 함께 하기"
+        else:
+            weekday = (start_date + timedelta(days=slot.offset)).weekday()
+            fallback = f"{_WEEKDAYS[weekday]} 운동"
         missions.append(
             _mission(
-                day,
-                read,
+                slot,
                 sessions,
-                str(day_plan.get("title") or f"{_WEEKDAYS[day.weekday()]} 운동"),
+                str(day_plan.get("title") or fallback),
                 {
                     "child": str(day_plan.get("child") or ""),
                     "parent": str(day_plan.get("parent") or ""),
                 },
                 str(day_plan.get("reason") or ""),
-                cheerers,
-                constraints.minutes_per_session,
+                start_date,
+                weeks,
             )
         )
     return missions or None
@@ -415,24 +457,23 @@ def _by_llm(
 
 def _by_rule(
     read: Read,
-    slots: tuple[int, ...],
+    slots: list[Slot],
     constraints: Constraints,
     evidence_base: list[int],
     citations: Citations,
     start_date: date,
-    cheerers: list[dict[str, str]],
+    weeks: int,
 ) -> list[dict[str, Any]]:
     prescribed = catalog.prescribed_names(read.chunks[:4])
-    copy = _rule_copy(read, constraints)
     reason = (
         f"또래 처방에 나온 동작을 앞세워 골랐습니다 [{evidence_base[0]}]." if evidence_base else ""
     )
     used: set[str] = set()
     missions = []
-    for offset in slots:
+    for slot in slots:
         picked = catalog.routine(
             read.profile.age_group,
-            constraints.minutes_per_session,
+            slot.minutes,
             factor=read.factor,
             prescribed=prescribed,
             conditions=constraints.conditions(),
@@ -443,17 +484,20 @@ def _by_rule(
             continue
         used |= {clip.title for _, clip in flat}
         sessions = _sessions_from(flat, read.factor, evidence_base, citations)
-        day = start_date + timedelta(days=offset)
+        if slot.weekly:
+            title = f"이번 주 함께 {read.factor or '전신'} 기르기"
+        else:
+            day = start_date + timedelta(days=slot.offset)
+            title = f"{_WEEKDAYS[day.weekday()]} {read.factor or '전신'} 기르기"
         missions.append(
             _mission(
-                day,
-                read,
+                slot,
                 sessions,
-                f"{_WEEKDAYS[day.weekday()]} {read.factor or '전신'} 기르기",
-                dict(copy),
+                title,
+                _rule_copy(read, constraints, slot),
                 reason,
-                cheerers,
-                constraints.minutes_per_session,
+                start_date,
+                weeks,
             )
         )
     return missions
@@ -507,12 +551,17 @@ def build(
         ]
         return Plan(steps, None, True, "no_relevant_source")
 
-    slots = _WEEK_SLOTS.get(constraints.days_per_week, _WEEK_SLOTS[3])
+    day_slots = _WEEK_SLOTS.get(constraints.days_per_week, _WEEK_SLOTS[3])
+    # 일간은 주행자가 받는다. 동반자는 제 몫을 따로 받지 않고 주간에 함께한다 —
+    # 「동반자」가 그런 뜻이다. 주행자가 없으면 첫 사람을 주행자로 본다.
+    drivers = [r for r in reads if r.profile.role == "주행자"] or reads[:1]
+    everyone = [{"ref": r.profile.ref, "role": r.profile.role} for r in reads] + cheerers
+
     missions: list[dict[str, Any]] = []
     by_llm = 0
     clip_total = 0
 
-    for read in reads:
+    for read in drivers:
         if not read.chunks:
             continue
         prescribed = catalog.prescribed_names(read.chunks[:4])
@@ -527,15 +576,21 @@ def build(
         if not pool:
             continue
         evidence_base = [citations.add(chunk) for chunk in read.chunks[:2]]
+        mine = [{"ref": read.profile.ref, "role": read.profile.role}] + cheerers
+        slots = [
+            Slot("일간", offset, constraints.minutes_per_session, mine) for offset in day_slots
+        ]
+        # 주간은 온 가족이 한 번 길게 한다. 주행자가 여럿이어도 한 건만 둔다.
+        if constraints.weekly_minutes and read is drivers[0]:
+            slots.append(Slot("주간", WEEKLY_SLOT, constraints.weekly_minutes, everyone))
+
         theirs = _by_llm(
-            read, pool, slots, constraints, evidence_base, citations, start_date, cheerers
+            read, pool, slots, constraints, evidence_base, citations, start_date, weeks
         )
         if theirs:
             by_llm += len(theirs)
         else:
-            theirs = _by_rule(
-                read, slots, constraints, evidence_base, citations, start_date, cheerers
-            )
+            theirs = _by_rule(read, slots, constraints, evidence_base, citations, start_date, weeks)
         missions.extend(theirs)
         clip_total += sum(len(mission["sessions"]) for mission in theirs)
 
