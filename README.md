@@ -75,8 +75,8 @@ python scripts/probe.py
 
 ```bash
 make tables        # 원자료 67만 행 → 또래 분포 1,746줄 · 인증 기준 1,122줄 · 등급 분포 1,048줄
-make clips         # 화면 글자 → 클립 531개 (영상 48편, 길이 중앙값 52초)
-make clip-labels   # 클립 이름 264개 → 처방 어휘·체력요인·단계·조건
+make clips         # 화면 글자 → 클립 695개 (영상 48편, 길이 중앙값 42초)
+make clip-labels   # 클립 이름 334개 → 처방 어휘·체력요인·단계·조건
 ```
 
 `make clip-labels` 만 LLM 을 부른다. 이미 붙여 둔 이름은 다시 묻지 않고, 사람이

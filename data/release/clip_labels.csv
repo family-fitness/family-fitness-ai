@@ -5,10 +5,13 @@ name_on_video,exercise_name,fitness_factor,phase,is_exercise,home_ok,quiet,needs
 H쪽으로 실시한다,,,준비운동,False,True,True,False,llm,0.0
 T-W-Y-A,,근력,본운동,True,True,True,False,llm,0.0
 Y•T•W 운동,,근력,본운동,True,True,True,False,llm,0.0
+가볍게 달리기,조깅,심폐지구력,준비운동,True,True,False,False,human,0.0
 가슴 뒤로 젖히기,,유연성,정리운동,True,True,True,False,llm,0.0
 가슴 앞으로 내밀기,,유연성,준비운동,True,True,True,False,llm,0.0
+가슴 앞으로 팔 밀기,,근력,본운동,True,True,True,True,human,0.0
 가슴 열고 몸 회전하기,,유연성,정리운동,True,True,True,False,llm,0.0
 가슴 활짝 펴기,,유연성,준비운동,True,True,True,False,llm,0.0
+가위 바위 보 해요,,협응력,준비운동,True,True,True,False,human,0.0
 가위-바위-보 달리기,,민첩성,본운동,True,False,False,False,llm,0.0
 개구리 점프해요,,순발력,본운동,True,True,False,False,llm,0.0
 거꾸로 균형을 잡아요,,평형성,본운동,True,True,True,False,llm,0.0
@@ -41,12 +44,15 @@ Y•T•W 운동,,근력,본운동,True,True,True,False,llm,0.0
 넙다리 안쪽 늘리기 (나비자세),,유연성,준비운동,True,True,True,False,llm,0.0
 네 발로 걸어요,,협응력,본운동,True,True,True,False,llm,0.0
 높이 멀리 뛰어요,,순발력,본운동,True,False,False,False,llm,0.0
+누워서 다리 들어올리기,누워서 다리 들어올리기,근지구력,본운동,True,True,True,False,human,0.0
 누워서 다리올리기 & 쪼그려 앉고 일어서기,,근력,본운동,True,True,True,False,llm,0.0
 누워서 동시에 윗몸일으키기,,근력,본운동,True,True,True,False,llm,0.0
 누워서 목 들어 이마 밀어 버티기,,근지구력,본운동,True,True,True,False,llm,0.0
 누워서 몸통 비틀기,,유연성,정리운동,True,True,True,False,llm,0.0
 누워서 무릎 구부려 당기기,,유연성,준비운동,True,True,True,False,llm,0.0
 누워서 밴드 다리 걸고 올리기,밴드 걸고 누워서 다리 들어올리기,,본운동,True,True,True,True,embed,0.9502
+누워서 엉덩이 들기,누워서 엉덩이 들어올리기,근력,본운동,True,True,True,False,human,0.0
+누워서 영덩이 들기 +가슴 앞으로 팔 밀기,누워서 엉덩이 들기+가슴 앞으로 팔 밀기,근력,본운동,True,True,True,True,human,0.0
 누워서 한발 뻗어 윗몸 일으키기,,근력,본운동,True,True,True,False,llm,0.0
 눈 감고 외발서기,,평형성,본운동,True,True,True,False,llm,0.0
 늘리기,,유연성,준비운동,True,True,True,False,llm,0.0
@@ -54,6 +60,7 @@ Y•T•W 운동,,근력,본운동,True,True,True,False,llm,0.0
 다리 뒤 늘리기,,유연성,정리운동,True,True,True,False,llm,0.0
 다리 뒤로 뻗어주기,,유연성,정리운동,True,True,True,False,llm,0.0
 다리 들었다 내리기 운동,누워서 다리 들어올리기,근력,본운동,True,True,True,False,llm,0.0
+다리 벌려 앉았다 일어서기,앉았다 일어서기,근력,본운동,True,True,True,False,human,0.0
 다리 뻗어 상체 숙이기,다리뻗어 상체 숙이기,,준비운동,True,True,True,False,exact,1.0
 다리뻗어 상체 숙이기,다리뻗어 상체 숙이기,,정리운동,True,True,True,False,exact,1.0
 다양한 공을 던져 넣어요,,협응력,본운동,True,False,False,True,llm,0.0
@@ -66,6 +73,8 @@ Y•T•W 운동,,근력,본운동,True,True,True,False,llm,0.0
 되받아치기를 해요,,협응력,본운동,True,False,False,True,llm,0.0
 두 발 뛰기를 해요,,순발력,본운동,True,True,False,False,llm,0.0
 등 뒤로 보내기,,유연성,준비운동,True,True,True,False,llm,0.0
+"등, 허리 스트레칭",허리 스트레칭,유연성,정리운동,True,True,True,False,human,0.0
+"등, 허리, 무릎 스트레칭",허리 스트레칭,유연성,정리운동,True,True,True,False,human,0.0
 등근육 스트레츠,,유연성,정리운동,True,True,True,False,llm,0.0
 딩딩링을 끼워요,딩딩링을 끼워요,,본운동,True,True,True,False,exact,1.0
 뛰어 넘기를 해요,,순발력,본운동,True,False,False,True,llm,0.0
@@ -77,11 +86,20 @@ Y•T•W 운동,,근력,본운동,True,True,True,False,llm,0.0
 말 뛰기를 해요,,순발력,본운동,True,True,False,False,llm,0.0
 말처럼 원마커를 뛰어요,,순발력,본운동,True,True,False,True,llm,0.0
 머리 어깨 무릎 발 해요,,협응력,준비운동,True,True,True,False,llm,0.0
+머리 위로 들어올리기,,근력,본운동,True,True,True,True,human,0.0
 멘탈 케어' 운동,,,준비운동,False,True,True,False,llm,0.0
 목 돌리기,,유연성,준비운동,True,True,True,False,llm,0.0
+목 돌리기 몸통 반대주,목 돌리기,유연성,준비운동,True,True,True,False,human,0.0
+목 돌리기 몸통을 반대주,목 돌리기,유연성,준비운동,True,True,True,False,human,0.0
+목 스트레칭,,유연성,정리운동,True,True,True,False,human,0.0
 목 좌-우-앞-뒤-대각선 당기기,,유연성,준비운동,True,True,True,False,llm,0.0
 몸을 돌려요,,유연성,본운동,True,True,True,False,llm,0.0
 몸통 비틀며 윗몸일으키기,,근지구력,본운동,True,True,True,False,llm,0.0
+"몸통, 어깨 스트레칭",,유연성,준비운동,True,True,True,False,human,0.0
+무릎 스트레칭,,유연성,준비운동,True,True,True,False,human,0.0
+무릎 올리기 *머리 위로 들어올리,무릎 올리기+머리 위로 들어올리기,근력,본운동,True,True,True,True,human,0.0
+무릎 펴서 높게 차],무릎 펴서 높게 차기,유연성,본운동,True,True,True,False,human,0.0
+"무릎, 허리, 어깨 스트레칭",허리 스트레칭,유연성,준비운동,True,True,True,False,human,0.0
 무릎올려 대각선 당기기,,협응력,준비운동,True,True,True,False,llm,0.0
 미끄러지기를 해요,,민첩성,본운동,True,True,False,False,llm,0.0
 밀기 & 버티기,,근력,본운동,True,True,True,False,llm,0.0
@@ -94,6 +112,7 @@ Y•T•W 운동,,근력,본운동,True,True,True,False,llm,0.0
 번갈아 뛰기를 해요,,순발력,본운동,True,True,False,False,llm,0.0
 번갈아 뛰며 놀아요,,순발력,본운동,True,True,False,False,llm,0.0
 벤트 오버 로우,,근력,본운동,True,True,True,True,llm,0.0
+복부 스트레칭,,유연성,정리운동,True,True,True,False,human,0.0
 봉 잡고 서서 가슴으로 끌어 내리기,,근력,본운동,True,False,True,True,llm,0.0
 분리배출 해요,분리배출 해요,,본운동,True,True,True,False,exact,1.0
 브릿지 만들어요,,근력,본운동,True,True,True,False,llm,0.0
@@ -101,16 +120,21 @@ Y•T•W 운동,,근력,본운동,True,True,True,False,llm,0.0
 비틀기를 해요,,유연성,본운동,True,True,True,False,llm,0.0
 빌리보를 밀어요,빌리보를 밀어요,,본운동,True,True,True,True,exact,1.0
 빠르게 맞춰요,,민첩성,본운동,True,True,True,True,llm,0.0
+빠른 말+빠른 주먹 지르기,빠른 발+빠른 주먹 지르기,민첩성,본운동,True,True,False,False,human,0.0
+빠른 발+빠른 주먹 지르기,,민첩성,본운동,True,True,False,False,human,0.0
 빵야 빵야를 해요,,협응력,본운동,True,True,True,False,llm,0.0
 뽁뽁이를 눌러요(손가락),뽁뽁이를 눌러요,,본운동,True,True,True,True,embed,0.9027
 뽁뽁이를 밟아요(발가락),,근력,본운동,True,True,True,True,llm,0.0
 사이드 점프,,순발력,본운동,True,True,False,False,llm,0.0
+상체 숙여 팔꿈치 펴기,,근력,본운동,True,True,True,True,human,0.0
+상체 숙여서 뒤로 당기기,,근력,본운동,True,True,True,True,human,0.0
 상체숙여 다리 늘리기,,유연성,본운동,True,True,True,False,llm,0.0
 상체숙여 발목 잡기,,유연성,준비운동,True,True,True,False,llm,0.0
 새처럼 날아요,,협응력,본운동,True,True,True,False,llm,0.0
 서서 공 바닥에 튀겨 주고받기,공 양손으로 주고 받기,협응력,본운동,True,False,False,True,llm,0.0
 서서 다리 뒤로뻗어 상체 숙이기,다리 벌려 앞으로 상체 숙이기,,준비운동,True,True,True,False,embed,0.9271
 서서 다리 모으고 벌리기,서서 다리 모으고 벌리기,,본운동,True,True,True,False,exact,1.0
+서서 몸통 옆으로 굽히기,몸통 옆으로 굽히기,유연성,본운동,True,True,True,False,human,0.0
 서서 무릎 옆으로 올리기,,근력,본운동,True,True,True,False,llm,0.0
 서서 외발 굽혀 당기기,,유연성,준비운동,True,True,True,False,llm,0.0
 서서 재기차기,,협응력,본운동,True,True,False,True,llm,0.0
@@ -124,9 +148,11 @@ Y•T•W 운동,,근력,본운동,True,True,True,False,llm,0.0
 손가락 박수 쳐요,,협응력,준비운동,True,True,True,False,llm,0.0
 손가락 숫자 세어요,,협응력,준비운동,True,True,True,False,llm,0.0
 손목 잡고 팔 스트레칭,,유연성,본운동,True,True,True,False,llm,0.0
+"손목, 발목 돌리기",,유연성,준비운동,True,True,True,False,human,0.0
 손목잡고 팔 늘리기,,유연성,정리운동,True,True,True,False,llm,0.0
 수건을 돌려요,,유연성,본운동,True,True,True,True,llm,0.0
 수박나라로 떠나요,,협응력,본운동,True,True,False,False,llm,0.0
+숨쉬기,,,정리운동,False,True,True,False,human,0.0
 스케이트 점프,,순발력,본운동,True,True,False,False,llm,0.0
 스쿼트,,근력,본운동,True,True,True,False,llm,0.0
 스쿼트 + 니업,,근력,본운동,True,True,True,False,llm,0.0
@@ -137,10 +163,15 @@ Y•T•W 운동,,근력,본운동,True,True,True,False,llm,0.0
 스틱잡고 상체 옆으로 숙이기,,유연성,준비운동,True,True,True,True,llm,0.0
 신나게 걸어요,걷기,심폐지구력,본운동,True,True,True,False,llm,0.0
 쌀 보리 해봐요,,민첩성,본운동,True,True,True,False,llm,0.0
+앉아서 뒤로 당기기,앉아서 뒤로 당기기,근력,본운동,True,True,True,True,human,0.0
 앉아서 상체숙여 양팔 등 뒤로 펴기,,유연성,본운동,True,True,True,False,llm,0.0
 앉아서 어깨 올리고 내리기,,유연성,준비운동,True,True,True,False,llm,0.0
+앉았다 들어올리기,,근력,본운동,True,True,True,True,human,0.0
+앉았다 들어올리기 +상체 숙여서 뒤로 당,앉았다 들어올리기+상체 숙여서 뒤로 당기기,근력,본운동,True,True,True,True,human,0.0
 앉았다 일어나며 뛰어오르기,,순발력,본운동,True,True,False,False,llm,0.0
 앉았다 일어나요,앉았다 일어서기,근력,본운동,True,True,True,False,llm,0.0
+앉았다 일어서기,앉았다 일어서기,근력,본운동,True,True,True,False,human,0.0
+앉았다 일어서기 +옆으로 다리 올리기,,근력,본운동,True,True,True,False,human,0.0
 알록달록 공을 옮겨요,알록달록 공을 옮겨요,,본운동,True,True,True,True,exact,1.0
 알록달록 길을 걸어요,,민첩성,본운동,True,True,True,True,llm,0.0
 알록달록 붙여요,알록달록 붙여요,,본운동,True,True,True,False,exact,1.0
@@ -150,29 +181,52 @@ Y•T•W 운동,,근력,본운동,True,True,True,False,llm,0.0
 암워킹,,근력,본운동,True,True,True,False,llm,0.0
 암터치 해봐요,,협응력,본운동,True,True,True,False,llm,0.0
 앞 뒤 점프,,순발력,본운동,True,True,False,False,llm,0.0
+"앞, 옆으로 팔 들어올리기",,근력,본운동,True,True,True,True,human,0.0
+앞으로 다리 뻗어 앉았다 일어서기,한발 앞으로 내밀고 앉았다 일어서기,근력,본운동,True,True,True,False,human,0.0
 양 발 넓게 벌리고 서서 옆으로 쪼그려 앉기,,근력,본운동,True,True,True,False,llm,0.0
+양말 앞뒤로 떨려 앉으 일어서기+팔꿈치 굽,양발 앞뒤로 벌려 앉았다 일어서기+팔꿈치 굽히기,근력,본운동,True,True,True,True,human,0.0
 양발 벌려 밀어주기,,유연성,준비운동,True,True,True,False,llm,0.0
+양발 앞뒤로 벌려 앉았다 일어서기,한발 앞으로 내밀고 앉았다 일어서기,근력,본운동,True,True,True,False,human,0.0
 양손을 대고 머리를 천천히 뒤로 젖힌다,,유연성,정리운동,True,True,True,False,llm,0.0
 양팔,,,준비운동,True,True,True,False,llm,0.0
 양팔 벌려 가슴 내밀기,,유연성,준비운동,True,True,True,False,llm,0.0
 양팔 벌려 전신 비틀기,,유연성,정리운동,True,True,True,False,llm,0.0
 양팔 위로 뻗기,,유연성,준비운동,True,True,True,False,llm,0.0
 어깨 늘리기,,유연성,정리운동,True,True,True,False,llm,0.0
+어깨 돌리기 양주 반,어깨 돌리기,유연성,준비운동,True,True,True,False,human,0.0
+어깨 스트레칭,어깨 스트레칭,,준비운동,True,True,True,False,exact,1.0
 어깨 스트레칭 해요,어깨 스트레칭,,준비운동,True,True,True,False,embed,0.9218
 어깨 후면 스트레칭,,유연성,정리운동,True,True,True,False,llm,0.0
+"어깨, 등 스트레칭",등/어깨 뒤쪽 스트레칭,유연성,준비운동,True,True,True,False,human,0.0
+"어깨, 복부, 엉덩관절 스트레칭",,유연성,정리운동,True,True,True,False,human,0.0
 엉금엉금 기어요,엉금엉금 기어요,,본운동,True,True,True,False,exact,1.0
+엉덩관절 돌리기,,유연성,준비운동,True,True,True,False,human,0.0
+엉덩관절 스트레칭,엉덩이 스트레칭,유연성,준비운동,True,True,True,False,human,0.0
+"엉덩관절, 어깨 스트레칭",,유연성,준비운동,True,True,True,False,human,0.0
 엎드려 누워 몸통 비틀기,,유연성,본운동,True,True,True,False,llm,0.0
 엎드려 누워서 양팔 가슴으로 끌어 내리기,,근력,본운동,True,True,True,False,llm,0.0
+엎드려 누워서 팔 다리 들기,엎드려서 팔 다리 들기,근력,본운동,True,True,True,False,human,0.0
+엎드려 누워서 허리 펴기,,근력,본운동,True,True,True,False,human,0.0
+엎드려 몸통 버티기,엎드려 버티기,근지구력,본운동,True,True,True,False,human,0.0
+엎드려 몸통 버티기 +몸통 회전하기,,근지구력,본운동,True,True,True,False,human,0.0
+엎드려 무릎 올리기,,근지구력,본운동,True,True,True,False,human,0.0
 "엎드려 버티기, 옆으로 버티기, 누워서 엉덩이 들기",엎드려 버티기,근지구력,본운동,True,True,True,False,llm,0.0
 엎드려 상체 들어올리기,엎드려 상체 들어올리기,,정리운동,True,True,True,False,exact,1.0
+엎드려 양 말 벌려 뛰기,엎드려 양발 벌려 뛰기,심폐지구력,본운동,True,True,False,False,human,0.0
 엎드려 어깨 눌러주기 (아기자세),,유연성,준비운동,True,True,True,False,llm,0.0
 엎드려 제자리 달리기,엎드려 무릎 연속 차기,심폐지구력,본운동,True,True,False,False,llm,0.0
 "엎드려 팔고 걷고, 되돌아 오기",,근력,본운동,True,True,True,False,llm,0.0
 "엎드려 팔로 걷고, 되돌아 오기",엎드려 팔로 걷기,근지구력,본운동,True,True,True,False,llm,0.0
+엎드려 팔로 걷기,엎드려 팔로 걷기,근지구력,본운동,True,True,True,False,human,0.0
+엎드려 한 발 위로 차기,엎드려서 다리 차올리기,근력,본운동,True,True,True,False,human,0.0
 엎드렸다 일어서기,,근지구력,본운동,True,True,False,False,llm,0.0
+엎드리고 일어서기,버피운동,심폐지구력,본운동,True,True,True,False,human,0.0
 영차영차 올라요,영차영차 올라요,,본운동,True,True,True,False,exact,1.0
 옆구리 늘리기,몸통 옆으로 굽히기,유연성,준비운동,True,True,True,False,llm,0.0
 옆으로 누워 발 뒤로 넘기기,,유연성,준비운동,True,True,True,False,llm,0.0
+옆으로 누워서 다리 올리기,옆으로 누워 다리 들어올리기,근력,본운동,True,True,True,False,human,0.0
+옆으로 다리 뻗어 앉았다 일어서기,,근력,본운동,True,True,True,False,human,0.0
+옆으로 몸통 버티기,옆으로 누워 버티기,근지구력,본운동,True,True,True,False,human,0.0
 옆으로 숙이기,몸통 옆으로 굽히기,유연성,정리운동,True,True,True,False,llm,0.0
 와이드 스쿼트,,근력,본운동,True,True,True,False,llm,0.0
 와이드스쿼트 + 카프레이즈,,근력,본운동,True,True,True,False,llm,0.0
@@ -180,8 +234,10 @@ Y•T•W 운동,,근력,본운동,True,True,True,False,llm,0.0
 외발 들어 발목 잡기,,평형성,준비운동,True,True,True,False,llm,0.0
 외발로 뛰어 좌우로 이동,,민첩성,본운동,True,True,False,False,llm,0.0
 우리 모두 다 같이,우리 모두 다같이,,본운동,True,True,True,False,exact,1.0
+윗몸 굽히기,윗몸 말아 올리기,근지구력,본운동,True,True,True,False,human,0.0
 윗몸 말며 공을 전달해요,윗몸 말며 공을 전달해요,,본운동,True,True,True,True,exact,1.0
 윗몸 말아 올려요,윗몸 말아 올리기,,본운동,True,True,True,False,embed,0.9216
+윗몸 비틀며 굽히기,,근지구력,본운동,True,True,True,False,human,0.0
 윗몸일으키기 & 팔 뒤로 펴주기,윗몸 일으키기,근지구력,본운동,True,True,True,False,llm,0.0
 의자 잡고 팔굽혀 버티기,,근지구력,본운동,True,True,True,True,llm,0.0
 의자에 앉았다 일어서기,의자 앞에서 앉았다 일어서기,,본운동,True,True,True,True,embed,0.9539
@@ -191,14 +247,21 @@ Y•T•W 운동,,근력,본운동,True,True,True,False,llm,0.0
 인사 체조,인사 체조,,준비운동,False,True,True,False,exact,1.0
 일어나는 동시에 양쪽 팔꿈치를 굽힌다,팔꿈치 굽히기,근력,본운동,True,True,True,True,llm,0.0
 일어나며 공 받기,,협응력,본운동,True,True,True,True,llm,0.0
+전신 늘리기,,유연성,정리운동,True,True,True,False,human,0.0
 점프 스쿼트,앉았다 일어서면서 점프하기,순발력,본운동,True,True,False,False,llm,0.0
 점프 펀치를 해요,,순발력,본운동,True,True,False,False,llm,0.0
 점핑점핑해요,점핑점핑해요,,본운동,True,True,True,False,exact,1.0
 제자리 5방향 뛰기,,민첩성,본운동,True,True,False,False,llm,0.0
+제자리 걷기,걷기,심폐지구력,준비운동,True,True,True,False,human,0.0
+제자리 걷기 +몸통 비틀기,,심폐지구력,본운동,True,True,True,False,human,0.0
+제자리 걷기 +몸통 옆으로 굽히기,,심폐지구력,본운동,True,True,True,False,human,0.0
+제자리 걷기 +무릎 올리기,,심폐지구력,본운동,True,True,True,False,human,0.0
+제자리 달리기,달리기,심폐지구력,본운동,True,True,False,False,human,0.0
 제자리 무릎 올려 달리기,무릎 높여 제자리 달리기,,본운동,True,False,False,False,embed,0.9649
 조심조심 걸어요,조심조심 걸어요,,본운동,True,True,True,False,exact,1.0
 종아리 들기 운동,서서 뒤꿈치 들기,근력,본운동,True,True,True,False,llm,0.0
 종아리 밀고 당기기,,유연성,준비운동,True,True,True,False,llm,0.0
+좌우로 스케이트 티,좌우로 스케이트 타기,민첩성,본운동,True,True,False,False,human,0.0
 주먹쥐고 앞으로 뻗어주기,,근지구력,본운동,True,True,True,False,llm,0.0
 줄넘기 해요(줄없는),줄넘기 해요,심폐지구력,본운동,True,True,False,False,llm,0.0
 중심을 잡아요,,평형성,본운동,True,True,True,False,llm,0.0
@@ -223,16 +286,19 @@ Y•T•W 운동,,근력,본운동,True,True,True,False,llm,0.0
 큰 비닐 흔들어요,,근력,본운동,True,True,True,True,llm,0.0
 투명 출넘기,,심폐지구력,본운동,True,True,False,False,llm,0.0
 튀기기를 해요,,협응력,본운동,True,True,True,True,llm,0.0
+팔 교차 뛰기,,심폐지구력,본운동,True,True,False,False,human,0.0
+팔 굽혀 펴기,팔굽혀펴기,근력,본운동,True,True,True,False,human,0.0
 팔 다리 옆으로 뻗기,,유연성,정리운동,True,True,True,False,llm,0.0
 팔 뒤로 젖히며 가슴 스트레칭,,유연성,정리운동,True,True,True,False,llm,0.0
 팔 말아올리기 & 팔 밑으로 내리기,,근력,본운동,True,True,True,False,llm,0.0
 팔 머리 위로 굽혀 당기기,,유연성,준비운동,True,True,True,False,llm,0.0
-팔 벌려 뛰기,팔벌려뛰기,,본운동,True,True,False,False,exact,1.0
+팔 벌려 뛰기,팔벌려뛰기,심폐지구력,준비운동,True,True,False,False,human,0.0
 팔 벌려 제자리 뛰기,다리 모았다 벌려 뛰기,심폐지구력,본운동,True,True,False,False,llm,0.0
 팔 안쪽으로 당기기,,유연성,준비운동,True,True,True,False,llm,0.0
 팔 펴고 박수쳐요,,협응력,준비운동,True,True,True,False,llm,0.0
 팔굽혀 펴기하고 상체 비틀기,팔굽혀펴기,근력,본운동,True,True,True,False,llm,0.0
 팔굽혀펴기 & 팔꿈치 당기기,팔굽혀펴기,근력,본운동,True,True,True,False,llm,0.0
+팔꿈치 굽히기,팔꿈치 굽히기,근력,본운동,True,True,True,True,human,0.0
 팔꿈치 등 뒤에서 굽히고 펴기,,근력,본운동,True,True,True,False,llm,0.0
 팔꿈치를 좌측으로 천천히 당긴다,,유연성,정리운동,True,True,True,False,llm,0.0
 팔벌려 몸통 비틀기,,유연성,준비운동,True,True,True,False,llm,0.0
@@ -250,6 +316,10 @@ Y•T•W 운동,,근력,본운동,True,True,True,False,llm,0.0
 허들 뛰어 넘어요,,순발력,본운동,True,False,False,True,llm,0.0
 허들 스텝,,민첩성,본운동,True,False,False,True,llm,0.0
 허리 굽혀 몸통 비틀기,,유연성,정리운동,True,True,True,False,llm,0.0
+허리 돌리기 골 반,허리 돌리기,유연성,준비운동,True,True,True,False,human,0.0
+허리 돌리기 골반 반,허리 돌리기,유연성,준비운동,True,True,True,False,human,0.0
+허리 돌리기 골븐 반,허리 돌리기,유연성,준비운동,True,True,True,False,human,0.0
+허리 숙였다 펴기,,근력,본운동,True,True,True,False,human,0.0
 허벅지 뒤쪽 늘리기,넙다리 뒤쪽 스트레칭,유연성,정리운동,True,True,True,False,llm,0.0
 허수아비가 되어요,,평형성,본운동,True,True,True,False,llm,0.0
 호흡을 깊,,,정리운동,False,True,True,False,llm,0.0

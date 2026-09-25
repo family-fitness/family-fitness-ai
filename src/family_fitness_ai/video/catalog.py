@@ -18,9 +18,28 @@ from family_fitness_ai.video.vocabulary import exercises_in
 
 PHASES = ("준비운동", "본운동", "정리운동")
 #: 한 회를 단계에 나누는 몫. 몸을 덥히고, 하고, 푼다.
-PHASE_SHARE = {"준비운동": 0.2, "본운동": 0.6, "정리운동": 0.2}
-#: 한 단계에 이보다 많이 넣지 않는다. 카드가 길어지면 아이가 안 본다.
-MAX_PER_PHASE = 6
+#: 한 회에 몇 편을 담나 — (준비운동, 본운동, 정리운동).
+#:
+#: 영상 길이를 다 합쳐 요청 시간을 채우지 않는다. 화면에서 한 편을 여러 세트
+#: 반복해 시간을 채우기 때문이다. 시간으로 고르면 30~40초짜리 클립이 스무 편씩
+#: 붙어 따라 할 수 없는 목록이 된다 — 가짓수로 고른다.
+SESSION_CLIPS: tuple[tuple[int, tuple[int, int, int]], ...] = (
+    (10, (1, 3, 1)),  # 10분까지   5편
+    (20, (2, 4, 1)),  # 20분까지   7편
+    (35, (2, 5, 2)),  # 35분까지   9편
+    (999, (3, 6, 3)),  # 그 위     12편
+)
+
+#: 한 세트로 삼기 좋은 길이. 같은 순위면 이 근처를 먼저 고른다.
+SET_SECONDS = 60
+
+
+def clip_counts(minutes: int) -> dict[str, int]:
+    """그 시간에 몇 편을 담을지 단계별로."""
+    counts = next(
+        (counts for limit, counts in SESSION_CLIPS if minutes <= limit), SESSION_CLIPS[-1][1]
+    )
+    return dict(zip(PHASES, counts, strict=True))
 
 
 @dataclass(frozen=True)
@@ -82,7 +101,9 @@ def clips() -> tuple[Clip, ...]:
                     name=row["name_on_video"],
                     exercise_name=label.get("exercise_name", ""),
                     fitness_factor=label.get("fitness_factor", ""),
-                    phase=label.get("phase") or row["phase_on_video"] or "본운동",
+                    # 영상이 화면에 띄운 단계를 먼저 믿는다. 같은 스트레칭이 준비운동에도
+                    # 정리운동에도 나오는데, 라벨 표는 이름당 한 단계라 그걸 못 담는다.
+                    phase=row["phase_on_video"] or label.get("phase") or "본운동",
                     start_sec=int(row["start_sec"]),
                     end_sec=int(row["end_sec"]),
                     age_group=video.age_group if video else "",
@@ -116,7 +137,11 @@ def _fits(clip: Clip, conditions: Conditions) -> bool:
 
 
 def _rank(clip: Clip, factor: str, prescribed: set[str]) -> tuple[int, int]:
-    """앞에 설 차례. 처방에 실제로 나온 동작이 먼저다."""
+    """앞에 설 차례. 처방에 실제로 나온 동작이 먼저다.
+
+    같은 순위면 한 세트로 삼기 좋은 길이를 먼저 고른다. 네 분짜리 한 편을 여러
+    세트 반복하라고 낼 수는 없다.
+    """
     score = 0
     if clip.exercise_name and clip.exercise_name in prescribed:
         score -= 4
@@ -124,7 +149,7 @@ def _rank(clip: Clip, factor: str, prescribed: set[str]) -> tuple[int, int]:
         score -= 2
     if clip.exercise_name:
         score -= 1
-    return score, -clip.duration_sec
+    return score, abs(clip.duration_sec - SET_SECONDS)
 
 
 def prescribed_names(chunks: list[Chunk]) -> set[str]:
@@ -145,40 +170,31 @@ def routine(
 ) -> dict[str, list[Clip]]:
     """한 회분 클립을 단계별로 고른다.
 
-    같은 동작을 두 번 넣지 않고, 한 단계의 몫을 채우면 다음 단계로 넘어간다.
-    조건에 걸려 남는 클립이 없으면 그 단계는 빈 채로 둔다 — 조건을 몰래 풀어
-    아무거나 채우지 않는다.
+    시간이 아니라 **가짓수**를 맞춘다(SESSION_CLIPS). 화면에서 한 편을 여러 세트
+    반복하므로 영상 길이의 합이 요청 시간과 같을 필요가 없다.
+
+    같은 동작을 두 번 넣지 않는다. 조건에 걸려 남는 클립이 없으면 그 단계는 빈
+    채로 둔다 — 조건을 몰래 풀어 아무거나 채우지 않는다.
     """
     conditions = conditions or Conditions()
     prescribed = prescribed or set()
     pool = [clip for clip in clips() if clip.age_group == age_group and _fits(clip, conditions)]
 
+    want = clip_counts(minutes)
     picked: dict[str, list[Clip]] = {phase: [] for phase in PHASES}
     # 날마다 같은 차림을 내지 않으려고, 앞선 날에 쓴 동작을 빼고 고른다.
     used: set[str] = set(exclude or ())
     for phase in PHASES:
-        budget = minutes * 60 * PHASE_SHARE[phase]
-        spent = 0
-        # 몫 안에 들어오는 클립이 하나라도 있으면 그것들로만 채운다. 한 편이
-        # 통째로 한 동작인 긴 영상 때문에 10분 요청이 14분이 되는 일을 막는다.
-        fitting = [c for c in pool if c.phase == phase and c.duration_sec <= max(budget * 1.3, 90)]
-        candidates = fitting or [c for c in pool if c.phase == phase]
-        if all(c.title in used for c in candidates):
+        candidates = [clip for clip in pool if clip.phase == phase]
+        if candidates and all(clip.title in used for clip in candidates):
             # 뺄 것을 빼고 나니 남는 게 없다. 그 단계만 처음으로 되돌린다.
-            used -= {c.title for c in candidates}
-        for clip in sorted(
-            candidates,
-            key=lambda c: _rank(c, factor, prescribed),
-        ):
-            if clip.title in used or len(picked[phase]) >= MAX_PER_PHASE:
-                continue
-            # 이미 한 개라도 담았는데 이 클립이 몫을 크게 넘기면 건너뛴다.
-            if picked[phase] and spent + clip.duration_sec > budget * 1.3:
+            used -= {clip.title for clip in candidates}
+        for clip in sorted(candidates, key=lambda c: _rank(c, factor, prescribed)):
+            if clip.title in used:
                 continue
             picked[phase].append(clip)
             used.add(clip.title)
-            spent += clip.duration_sec
-            if spent >= budget:
+            if len(picked[phase]) >= want[phase]:
                 break
     return picked
 

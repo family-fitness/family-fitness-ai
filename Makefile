@@ -1,4 +1,4 @@
-.PHONY: verify lint types test tables clips clip-labels medical serve probe
+.PHONY: verify lint types test tables ocr-name clips clip-labels medical serve probe
 
 ## 가상환경을 켜 두었으면 그대로, 아니면 `make verify PY=.venv/bin/python`.
 PY ?= python
@@ -26,6 +26,13 @@ DATA_DIR ?= data/raw
 ## 백분위·점수·등급·궤적이 전부 여기서 나온다. 몇 분 걸린다.
 tables:
 	$(PY) -m family_fitness_ai.stats.build --data-dir "$(DATA_DIR)"
+
+## 제목·자막 칸에 운동 이름이 안 걸리는 영상만 이름표 자리를 따로 읽는다.
+## 성인 「4주 프로그램」이 그렇다 — 이름표가 왼쪽 아래에 뜨는데 자막 칸이 비껴간다.
+## 받아 둔 프레임을 읽을 뿐 유튜브에 다시 가지 않는다. 영상 하나에 30초쯤.
+ADULT_PROGRAM ?= IhShIA-WJNE yrxN8UyUXoc PTxUuItSAtY lVd366kW7KI
+ocr-name:
+	$(PY) -m family_fitness_ai.video.ocr $(ADULT_PROGRAM)
 
 ## 읽어 둔 화면 글자 → 클립(시작·끝이 있는 한 동작).
 ## 영상 한 편에 운동이 여럿이라 통째로는 못 쓴다. 유튜브에 다시 가지 않는다.

@@ -26,9 +26,10 @@ class Settings(BaseSettings):
     #: 편성과 문구를 LLM 이 맡나. 기본은 켜짐이고, 키가 없거나 호출이 실패하면
     #: 규칙 편성으로 내려간다 — 서비스가 멈추지는 않는다.
     coach_llm: bool = True
-    #: claude | gemini
+    #: claude | gemini. 아래 모델 이름이 백엔드를 말해 주면 그쪽을 따른다.
     coach_backend: str = "claude"
-    #: 비우면 백엔드의 기본 모델.
+    #: 비우면 백엔드의 기본 모델. 이름만 바꿔도 백엔드가 따라간다 —
+    #: `claude-haiku-4-5` · `claude-sonnet-5` · `gemini-flash-latest` 다 된다.
     coach_model: str = ""
 
     anthropic_api_key: str = ""
