@@ -13,6 +13,7 @@ import pytest
 from conftest import needs_embedder, needs_index, needs_release
 
 from family_fitness_ai.coach import compose
+from family_fitness_ai.video import catalog
 
 pytestmark = [needs_release, needs_index, needs_embedder]
 
@@ -50,6 +51,7 @@ def test_the_plan_may_only_use_clips_we_handed_over(monkeypatch: pytest.MonkeyPa
             ids.append(clip["id"])
             if len(ids) == 3:
                 break
+        captured["ids"] = ids
         return [
             {
                 "day_offset": 0,
@@ -73,14 +75,15 @@ def test_the_plan_may_only_use_clips_we_handed_over(monkeypatch: pytest.MonkeyPa
     assert plan_result.proposal is not None
     missions = plan_result.proposal["missions"]
     assert len(missions) == 1
-    # 지어낸 id 한 자리만 빠지고 나머지 셋은 선다.
-    assert len(missions[0]["sessions"]) == 3
+    # 지어낸 id 한 자리만 빠지고 코치가 고른 셋은 선다. 모자란 편수는 목록에서 채운다.
+    sessions = missions[0]["sessions"]
+    names = {clip["id"]: clip["이름"] for clip in captured["클립"]}  # type: ignore[union-attr]
+    picked = {names[i] for i in captured["ids"]}  # type: ignore[union-attr]
+    assert picked <= {s["exercise_name"] for s in sessions}
+    assert len(sessions) == sum(catalog.clip_counts(15).values())
     assert missions[0]["title"] == "월요일 늘이기"
-    assert [s["phase"] for s in missions[0]["sessions"]] == [
-        "준비운동",
-        "본운동",
-        "정리운동",
-    ]
+    phases = [s["phase"] for s in sessions]
+    assert phases == sorted(phases, key=catalog.PHASES.index)
     # 고를 수 있는 것은 우리가 준다 — 근거와 클립이 프롬프트에 실려 있어야 한다.
     assert captured["근거"] and captured["클립"]
     assert captured["참여자"]["연령대"] == "유소년"

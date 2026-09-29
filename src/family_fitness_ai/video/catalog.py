@@ -223,15 +223,35 @@ def pool(
     rank = lambda clip: _rank(clip, factor, prescribed)  # noqa: E731
     same.sort(key=rank)
     other.sort(key=rank)
+    # 또래가 모자란지는 합치기 전 클립 수로 본다. 합친 뒤의 수로 보면 조건을 켠
+    # 유소년·성인이 60 밑으로 내려가, 전에 없던 다른 연령대가 섞이고 알림이 뜬다.
+    short = len(same) < limit // 2
 
+    # 같은 동작이 영상마다 따로 잘려 이름이 같은 클립이 많다(「엉덩이 스트레칭」 20개).
+    # 그대로 넘기면 LLM 이 다른 것인 줄 알고 같은 날 둘을 고르거나 다른 날 또 고른다.
+    # 이름·단계마다 순위가 가장 높은 하나만 남긴다.
+    same = _distinct(same)
     picked = same[:limit]
     notice = ""
-    if len(picked) < limit // 2:
+    if short:
+        taken = {_key(clip) for clip in picked}
         room = limit - len(picked)
-        picked += other[:room]
+        picked += [clip for clip in _distinct(other) if _key(clip) not in taken][:room]
         if room and other:
             notice = (
                 f"{age_group} 라벨이 붙은 영상이 적어 다른 연령대 영상도 함께 골랐습니다. "
                 "그대로 쓸지는 보고 정해 주세요."
             )
     return picked, notice
+
+
+def _key(clip: Clip) -> tuple[str, str]:
+    return clip.title, clip.phase
+
+
+def _distinct(ranked: list[Clip]) -> list[Clip]:
+    """이름·단계가 같은 클립 중 앞선 하나만. 순위대로 들어와야 한다."""
+    kept: dict[tuple[str, str], Clip] = {}
+    for clip in ranked:
+        kept.setdefault(_key(clip), clip)
+    return list(kept.values())

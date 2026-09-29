@@ -284,6 +284,19 @@ def _rule_copy(read: Read, constraints: Constraints, slot: Slot) -> dict[str, st
     return {"child": child, "parent": parent}
 
 
+def _rule_title(read: Read, slot: Slot, start_date: date) -> str:
+    if slot.weekly:
+        return f"이번 주 함께 {read.factor or '전신'} 기르기"
+    day = start_date + timedelta(days=slot.offset)
+    return f"{_WEEKDAYS[day.weekday()]} {read.factor or '전신'} 기르기"
+
+
+def _rule_reason(evidence_base: list[int]) -> str:
+    if not evidence_base:
+        return ""
+    return f"또래 처방에 나온 동작을 앞세워 골랐습니다 [{evidence_base[0]}]."
+
+
 def _sessions_from(
     clips: list[tuple[str, catalog.Clip]],
     fallback_factor: str,
@@ -341,6 +354,16 @@ def _mission(
     }
 
 
+@dataclass
+class Tally:
+    """코치의 편성을 우리가 손본 만큼. 편성 단계 요약에 싣는다 — 숨기지 않는다."""
+
+    #: 코치가 모자라게 골라 목록에서 채운 클립
+    filled: int = 0
+    #: 길이·금지 어휘·빠진 동작 때문에 규칙 문구로 바꾼 칸
+    rewritten: int = 0
+
+
 def _by_llm(
     read: Read,
     pool: list[catalog.Clip],
@@ -350,6 +373,7 @@ def _by_llm(
     citations: Citations,
     start_date: date,
     weeks: int,
+    tally: Tally,
 ) -> list[dict[str, Any]] | None:
     ids = {f"c{index}": clip for index, clip in enumerate(pool)}
     payload = {
@@ -417,42 +441,119 @@ def _by_llm(
             phase = str(row.get("phase") or clip.phase)
             if phase in offered and clip.title not in {c.title for c in offered[phase]}:
                 offered[phase].append(clip)
-
-        # 단계마다 정해진 수만큼만 받는다. 이번 주에 안 쓴 것을 앞세우되, 그것으로
-        # 모자라면 쓴 것도 받는다 — 빈 단계로 두는 것보다 낫다.
-        want = catalog.clip_counts(slot.minutes)
-        chosen: list[tuple[str, catalog.Clip]] = []
-        seen: set[str] = set()
-        for phase in catalog.PHASES:
-            candidates = [c for c in offered[phase] if c.title not in seen]
-            fresh = [c for c in candidates if c.title not in week]
-            for clip in (fresh + [c for c in candidates if c.title in week])[: want[phase]]:
-                seen.add(clip.title)
-                chosen.append((phase, clip))
-        if not chosen:
+        # 하나도 못 건진 날은 코치의 편성이 아니다. 목록으로 다 채우지 않고 버린다.
+        if not any(offered.values()):
             continue
-        week |= seen
-        sessions = _sessions_from(chosen, read.factor, evidence_base, citations)
-        if slot.weekly:
-            fallback = "이번 주 함께 하기"
-        else:
-            weekday = (start_date + timedelta(days=slot.offset)).weekday()
-            fallback = f"{_WEEKDAYS[weekday]} 운동"
+
+        chosen = _fill(offered, pool, catalog.clip_counts(slot.minutes), week, tally)
+        week |= {clip.title for _, clip in chosen}
+        # 코치가 골랐는데 이 회에서 빠진 동작. 글에 그 이름이 남아 있으면 못 쓴다.
+        picked = {clip.title for clips in offered.values() for clip in clips}
+        dropped = picked - {clip.title for _, clip in chosen}
+        text = _checked_text(
+            {key: day_plan.get(key) for key in ("title", "child", "parent", "reason")},
+            {
+                "title": _rule_title(read, slot, start_date),
+                **_rule_copy(read, constraints, slot),
+                "reason": _rule_reason(evidence_base),
+            },
+            dropped,
+            tally,
+        )
         missions.append(
             _mission(
                 slot,
-                sessions,
-                str(day_plan.get("title") or fallback),
-                {
-                    "child": str(day_plan.get("child") or ""),
-                    "parent": str(day_plan.get("parent") or ""),
-                },
-                str(day_plan.get("reason") or ""),
+                _sessions_from(chosen, read.factor, evidence_base, citations),
+                text["title"],
+                {"child": text["child"], "parent": text["parent"]},
+                text["reason"],
                 start_date,
                 weeks,
             )
         )
     return missions or None
+
+
+def _fill(
+    offered: dict[str, list[catalog.Clip]],
+    pool: list[catalog.Clip],
+    want: dict[str, int],
+    week: set[str],
+    tally: Tally,
+) -> list[tuple[str, catalog.Clip]]:
+    """단계마다 정한 편수를 채운다.
+
+    코치가 고른 것 중 이번 주에 안 쓴 것 → 목록에서 안 쓴 것 → 코치가 고른 쓴 것 →
+    목록에서 쓴 것 차례다. 코치는 편수를 모자라게 고르거나 이미 쓴 동작을 또
+    고른다 — 프롬프트로 시켜도 그렇다. 목록은 순위대로 서 있어 앞에서부터 채운다.
+    목록에도 없으면 모자란 채로 둔다. 조건을 몰래 풀지 않는다.
+    """
+    chosen: list[tuple[str, catalog.Clip]] = []
+    today: set[str] = set()
+    # 코치가 그날 고른 동작은 목록에서 채울 때 건드리지 않는다. 늘리는 동작은 준비·정리
+    # 두 단계에 다 있어서, 앞 단계를 채우다 코치가 뒤 단계에 둔 것을 먼저 가져간 적이 있다.
+    reserved = {clip.title for clips in offered.values() for clip in clips}
+    for phase in catalog.PHASES:
+        picked = offered[phase]
+        spare = [clip for clip in pool if clip.phase == phase and clip.title not in reserved]
+        order = (
+            [clip for clip in picked if clip.title not in week]
+            + [clip for clip in spare if clip.title not in week]
+            + [clip for clip in picked if clip.title in week]
+            + [clip for clip in spare if clip.title in week]
+        )
+        count = 0
+        for clip in order:
+            if count == want[phase]:
+                break
+            if clip.title in today:
+                continue
+            today.add(clip.title)
+            chosen.append((phase, clip))
+            count += 1
+            if clip not in picked:
+                tally.filled += 1
+    return chosen
+
+
+def _checked_text(
+    written: dict[str, Any],
+    fallback: dict[str, str],
+    dropped: set[str],
+    tally: Tally,
+) -> dict[str, str]:
+    """코치가 쓴 글을 칸마다 잰다. 어긋난 칸만 규칙 문구로 바꾼다.
+
+    길이(title 16 · child 45 · parent 70)와 금지 어휘, 그리고 이 회에서 빠진 동작의
+    이름을 본다. 프롬프트로 시키지만 지켜지지 않았다 — 주간 parent 가 92자로
+    나간 적이 있다. 반쯤 고쳐 쓰지 않는다. 그 칸을 통째로 바꾼다.
+    """
+    out: dict[str, str] = {}
+    for key, rule in fallback.items():
+        value = written.get(key)
+        limit = coach_llm.LIMITS.get(key)
+        fits = (
+            isinstance(value, str)
+            and bool(value.strip())
+            and (limit is None or len(value) <= limit)
+            and not words.banned_words_in(value)
+            and not any(name in value for name in dropped)
+        )
+        if fits:
+            out[key] = str(value)
+        else:
+            out[key] = rule
+            tally.rewritten += 1
+    return out
+
+
+def _in_order(missions: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """일간은 날짜순, 주간은 맨 뒤. 같은 날이면 주행자 차례를 지킨다.
+
+    코치가 답한 차례대로 두면 주간이 맨 앞에 오고, 주행자가 둘이면 날짜가 두 번
+    돈다. 정렬은 안정적이라 같은 날의 주행자 차례는 그대로다.
+    """
+    return sorted(missions, key=lambda m: (m["kind"] == "주간", m["period"]["start_date"]))
 
 
 def _by_rule(
@@ -465,9 +566,7 @@ def _by_rule(
     weeks: int,
 ) -> list[dict[str, Any]]:
     prescribed = catalog.prescribed_names(read.chunks[:4])
-    reason = (
-        f"또래 처방에 나온 동작을 앞세워 골랐습니다 [{evidence_base[0]}]." if evidence_base else ""
-    )
+    reason = _rule_reason(evidence_base)
     used: set[str] = set()
     missions = []
     for slot in slots:
@@ -484,16 +583,11 @@ def _by_rule(
             continue
         used |= {clip.title for _, clip in flat}
         sessions = _sessions_from(flat, read.factor, evidence_base, citations)
-        if slot.weekly:
-            title = f"이번 주 함께 {read.factor or '전신'} 기르기"
-        else:
-            day = start_date + timedelta(days=slot.offset)
-            title = f"{_WEEKDAYS[day.weekday()]} {read.factor or '전신'} 기르기"
         missions.append(
             _mission(
                 slot,
                 sessions,
-                title,
+                _rule_title(read, slot, start_date),
                 _rule_copy(read, constraints, slot),
                 reason,
                 start_date,
@@ -560,6 +654,7 @@ def build(
     missions: list[dict[str, Any]] = []
     by_llm = 0
     clip_total = 0
+    tally = Tally()
 
     for read in drivers:
         if not read.chunks:
@@ -585,7 +680,7 @@ def build(
             slots.append(Slot("주간", WEEKLY_SLOT, constraints.weekly_minutes, everyone))
 
         theirs = _by_llm(
-            read, pool, slots, constraints, evidence_base, citations, start_date, weeks
+            read, pool, slots, constraints, evidence_base, citations, start_date, weeks, tally
         )
         if theirs:
             by_llm += len(theirs)
@@ -606,17 +701,16 @@ def build(
         return Plan(steps, None, True, "no_citation_generated")
 
     how = "코치가" if by_llm else "규칙으로"
-    steps.append(
-        Step(
-            3,
-            "compose",
-            "ok" if by_llm else "partial",
-            f"미션 {len(missions)}건 · 클립 {clip_total}개 · {how} 편성",
-        )
-    )
+    summary = f"미션 {len(missions)}건 · 클립 {clip_total}개 · {how} 편성"
+    # 코치의 편성을 손봤으면 그만큼 말한다.
+    if tally.filled:
+        summary += f" · 목록에서 {tally.filled}편 채움"
+    if tally.rewritten:
+        summary += f" · 문구 {tally.rewritten}칸 규칙으로"
+    steps.append(Step(3, "compose", "ok" if by_llm else "partial", summary))
 
     proposal: dict[str, Any] = {
-        "missions": missions,
+        "missions": _in_order(missions),
         "citations": citations.dump(),
     }
     if notices:
