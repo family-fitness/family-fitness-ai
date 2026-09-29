@@ -39,6 +39,8 @@ class Settings(BaseSettings):
 
     anthropic_api_key: str = ""
     gemini_api_key: str = ""
+    #: 공공데이터포털 키(디코딩한 것). 국민체력100 동영상을 새로 받을 때만 쓴다 — 서비스는 안 쓴다.
+    data_go_kr_key: str = ""
 
     @field_validator("coach_llm", mode="before")
     @classmethod

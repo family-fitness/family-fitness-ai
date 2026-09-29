@@ -81,6 +81,7 @@ def test_video_search_may_come_back_empty_and_say_why():
     assert response.status_code == 200
     body = response.json()
     assert body["hits"] == [] or all(0 <= hit["score"] <= 1 for hit in body["hits"])
+    assert all(hit["source"] in ("youtube", "kspo") and hit["url"] for hit in body["hits"])
     assert isinstance(body["filtered_out"], dict)
 
 

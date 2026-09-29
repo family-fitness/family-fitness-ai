@@ -1,4 +1,4 @@
-.PHONY: verify lint types test tables ocr-name clips clip-labels medical embed-model serve probe
+.PHONY: verify lint types test tables ocr-name clips clip-labels kspo medical embed-model serve probe
 
 ## 가상환경을 켜 두었으면 그대로, 아니면 `make verify PY=.venv/bin/python`.
 PY ?= python
@@ -45,6 +45,13 @@ clips:
 ## 사람이 고친 줄(source=human)은 --refresh 를 줘도 지킨다.
 clip-labels:
 	$(PY) -m family_fitness_ai.video.labels --llm
+
+## 국민체력100 동영상(공공데이터) → data/release/kspo_videos.csv.
+## 한 편이 한 동작이라 끊지 않고, 연령대·요인·수준·도구를 표에서 그대로 옮긴다.
+## 받아 둔 원자료(data/raw/kspo)가 있으면 API 를 부르지 않는다. 다시 받으려면
+## `make kspo KSPO_ARGS=--fetch` (DATA_GO_KR_KEY 가 있어야 한다).
+kspo:
+	$(PY) -m family_fitness_ai.video.kspo $(KSPO_ARGS)
 
 ## 의료 질의를 얼마나 맞게 가리는지 잰다 (오탐·누락).
 medical:

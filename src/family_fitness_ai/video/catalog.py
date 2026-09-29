@@ -4,6 +4,10 @@
 클립(시작·끝이 있는 한 동작)으로 끊어 두고, 필요한 분량만큼 골라 **준비 → 본 →
 정리** 순서로 쌓는다. 클립 하나는 대개 1분 안쪽이라, 15분 한 회는 여러 클립이
 모여 만들어진다.
+
+클립은 두 곳에서 온다. 유튜브 영상을 화면 글자로 끊은 것(video_clips.csv)과,
+처음부터 한 편이 한 동작인 공단 영상(kspo_videos.csv)이다. `clips()` 가 한 목록으로
+합치고, 그 뒤로는 어느 쪽인지 가리지 않고 똑같이 고른다.
 """
 
 from __future__ import annotations
@@ -56,6 +60,15 @@ class Clip:
     quiet: bool
     home_ok: bool
     needs_props: bool
+    #: youtube · kspo. 고를 때는 가리지 않는다 — 트는 쪽만 다르다.
+    source: str = "youtube"
+    #: 공단 영상 파일. 유튜브는 video_id 로 튼다.
+    url: str = ""
+    #: 알맞은 체력수준(1 낮음 ~ 5 높음). 적혀 있지 않으면 누구나다.
+    level_lo: int = 1
+    level_hi: int = 5
+    #: 공단 영상은 코퍼스에 없어 인용 이름을 여기 들고 다닌다.
+    citation_label: str = ""
 
     @property
     def duration_sec(self) -> int:
@@ -67,8 +80,11 @@ class Clip:
         return self.exercise_name or self.name
 
     def as_video(self) -> dict[str, object]:
+        url = self.url or (f"https://www.youtube.com/watch?v={self.video_id}&t={self.start_sec}s")
         return {
+            "source": self.source,
             "video_id": self.video_id,
+            "url": url,
             "start_sec": self.start_sec,
             "end_sec": self.end_sec,
         }
@@ -112,11 +128,71 @@ def clips() -> tuple[Clip, ...]:
                     needs_props=label.get("needs_props") == "True",
                 )
             )
-    return tuple(out)
+    # 공단 영상을 같은 목록에 붙인다. 여기서부터는 어느 쪽인지 가리지 않고 고른다.
+    return tuple(out) + _kspo()
+
+
+def _kspo() -> tuple[Clip, ...]:
+    """data/release/kspo_videos.csv (video.kspo 가 만든다). 없으면 유튜브만 쓴다."""
+    path = settings().release_dir / "kspo_videos.csv"
+    if not path.exists():
+        return ()
+    with path.open(encoding="utf-8", newline="") as fh:
+        return tuple(
+            Clip(
+                video_id=row["video_id"],
+                name=row["name_on_video"],
+                exercise_name=row["exercise_name"],
+                fitness_factor=row["fitness_factor"],
+                # 유튜브와 같다 — 영상(여기서는 API)이 준 단계를 먼저 믿는다.
+                phase=row["phase_on_video"] or row["phase"] or "본운동",
+                start_sec=int(row["start_sec"]),
+                end_sec=int(row["end_sec"]),
+                age_group=row["age_group"],
+                quiet=row["quiet"] == "True",
+                home_ok=row["home_ok"] == "True",
+                needs_props=row["needs_props"] == "True",
+                source="kspo",
+                url=row["url"],
+                level_lo=int(row["level_lo"]),
+                level_hi=int(row["level_hi"]),
+                citation_label=row["citation_label"],
+            )
+            for row in csv.DictReader(fh)
+            if row["is_exercise"] == "True"
+        )
+
+
+@lru_cache
+def _kspo_citations() -> dict[str, Chunk]:
+    """공단 영상의 인용. 코퍼스에 없으니 표에서 만든다 — 없으면 검증이 제안을 버린다."""
+    out: dict[str, Chunk] = {}
+    for clip in _kspo():
+        out.setdefault(
+            clip.video_id,
+            Chunk(
+                chunk_id=f"kspo:{clip.video_id}",
+                source="video",
+                text=clip.citation_label,
+                citation_label=clip.citation_label,
+                citation_url=clip.url,
+                age_group=clip.age_group,
+                factors=(clip.fitness_factor,) if clip.fitness_factor else (),
+                grade="",
+            ),
+        )
+    return out
 
 
 def citation_for(video_id: str) -> Chunk | None:
-    return corpus().by_id(f"video:{video_id}")
+    return _kspo_citations().get(video_id) or corpus().by_id(f"video:{video_id}")
+
+
+def level_of(percentile: int | None) -> int | None:
+    """백분위 → 공단의 체력수준(1~5). 다섯으로 나눈다. 측정이 없으면 None."""
+    if percentile is None:
+        return None
+    return 1 + min(4, max(0, percentile) // 20)
 
 
 @dataclass(frozen=True)
@@ -136,11 +212,14 @@ def _fits(clip: Clip, conditions: Conditions) -> bool:
     return not (conditions.no_props and clip.needs_props)
 
 
-def _rank(clip: Clip, factor: str, prescribed: set[str]) -> tuple[int, int]:
+def _rank(
+    clip: Clip, factor: str, prescribed: set[str], level: int | None = None
+) -> tuple[int, int]:
     """앞에 설 차례. 처방에 실제로 나온 동작이 먼저다.
 
     같은 순위면 한 세트로 삼기 좋은 길이를 먼저 고른다. 네 분짜리 한 편을 여러
-    세트 반복하라고 낼 수는 없다.
+    세트 반복하라고 낼 수는 없다. 체력수준이 맞지 않는 영상은 뒤로 미룬다 —
+    빼지는 않는다. 수준이 적힌 것은 공단 영상뿐이라 유튜브 클립은 늘 맞는다.
     """
     score = 0
     if clip.exercise_name and clip.exercise_name in prescribed:
@@ -149,6 +228,8 @@ def _rank(clip: Clip, factor: str, prescribed: set[str]) -> tuple[int, int]:
         score -= 2
     if clip.exercise_name:
         score -= 1
+    if level is not None and not clip.level_lo <= level <= clip.level_hi:
+        score += 3
     return score, abs(clip.duration_sec - SET_SECONDS)
 
 
@@ -167,6 +248,7 @@ def routine(
     prescribed: set[str] | None = None,
     conditions: Conditions | None = None,
     exclude: set[str] | None = None,
+    level: int | None = None,
 ) -> dict[str, list[Clip]]:
     """한 회분 클립을 단계별로 고른다.
 
@@ -189,7 +271,7 @@ def routine(
         if candidates and all(clip.title in used for clip in candidates):
             # 뺄 것을 빼고 나니 남는 게 없다. 그 단계만 처음으로 되돌린다.
             used -= {clip.title for clip in candidates}
-        for clip in sorted(candidates, key=lambda c: _rank(c, factor, prescribed)):
+        for clip in sorted(candidates, key=lambda c: _rank(c, factor, prescribed, level)):
             if clip.title in used:
                 continue
             picked[phase].append(clip)
@@ -206,6 +288,7 @@ def pool(
     factor: str = "",
     prescribed: set[str] | None = None,
     limit: int = 120,
+    level: int | None = None,
 ) -> tuple[list[Clip], str]:
     """고를 만한 클립과, 또래 밖까지 갔는지 알리는 말.
 
@@ -220,18 +303,38 @@ def pool(
 
     same = [clip for clip in fitting if clip.age_group == age_group]
     other = [clip for clip in fitting if clip.age_group != age_group]
-    rank = lambda clip: _rank(clip, factor, prescribed)  # noqa: E731
+    rank = lambda clip: _rank(clip, factor, prescribed, level)  # noqa: E731
     same.sort(key=rank)
     other.sort(key=rank)
+    # 또래가 모자란지는 합치기 전 클립 수로 본다. 합친 뒤의 수로 보면 조건을 켠
+    # 유소년·성인이 60 밑으로 내려가, 전에 없던 다른 연령대가 섞이고 알림이 뜬다.
+    short = len(same) < limit // 2
 
+    # 같은 동작이 영상마다 따로 잘려 이름이 같은 클립이 많다(「엉덩이 스트레칭」 20개).
+    # 그대로 넘기면 LLM 이 다른 것인 줄 알고 같은 날 둘을 고르거나 다른 날 또 고른다.
+    # 이름·단계마다 순위가 가장 높은 하나만 남긴다.
+    same = _distinct(same)
     picked = same[:limit]
     notice = ""
-    if len(picked) < limit // 2:
+    if short:
+        taken = {_key(clip) for clip in picked}
         room = limit - len(picked)
-        picked += other[:room]
+        picked += [clip for clip in _distinct(other) if _key(clip) not in taken][:room]
         if room and other:
             notice = (
                 f"{age_group} 라벨이 붙은 영상이 적어 다른 연령대 영상도 함께 골랐습니다. "
                 "그대로 쓸지는 보고 정해 주세요."
             )
     return picked, notice
+
+
+def _key(clip: Clip) -> tuple[str, str]:
+    return clip.title, clip.phase
+
+
+def _distinct(ranked: list[Clip]) -> list[Clip]:
+    """이름·단계가 같은 클립 중 앞선 하나만. 순위대로 들어와야 한다."""
+    kept: dict[tuple[str, str], Clip] = {}
+    for clip in ranked:
+        kept.setdefault(_key(clip), clip)
+    return list(kept.values())
