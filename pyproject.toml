@@ -9,7 +9,7 @@ dependencies = [
   "faiss-cpu>=1.13",       # 코퍼스 벡터 검색
   "fastapi>=0.115",
   "google-genai>=2.0",     # 코치 편성·문구 (gemini)
-  "httpx>=0.27",           # 임베딩 서버 호출
+  "httpx>=0.27",           # 밖에 띄운 임베딩 서버 호출 (EMBEDDING_BACKEND=http)
   "numpy>=1.26",
   "openpyxl>=3.1",         # 인증 기준표(.xlsx) 읽기
   "pandas>=2.2",           # 원자료 → 또래 분포
@@ -19,6 +19,9 @@ dependencies = [
 
 [project.optional-dependencies]
 dev = ["pytest>=8.2", "pytest-cov>=5.0", "ruff>=0.6", "mypy>=1.10", "pre-commit>=3.7"]
+# 임베딩을 이 프로세스 안에서 돌린다 (EMBEDDING_BACKEND=local, 기본). C++ 을 빌드하므로
+# 기본 의존성에 두지 않는다 — CI 는 이것 없이 돈다.
+embed = ["llama-cpp-python>=0.3", "huggingface-hub>=0.24"]
 # 원자료를 새로 걷을 때만 쓴다. data/raw 에 이미 걷어 둔 것이 있어 서비스는 쓰지 않는다.
 collect = ["ocrmac>=1.0; sys_platform == 'darwin'", "youtube-transcript-api>=1.2"]
 

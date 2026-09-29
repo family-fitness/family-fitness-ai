@@ -1,4 +1,4 @@
-.PHONY: verify lint types test tables ocr-name clips clip-labels medical serve probe
+.PHONY: verify lint types test tables ocr-name clips clip-labels medical embed-model serve probe
 
 ## 가상환경을 켜 두었으면 그대로, 아니면 `make verify PY=.venv/bin/python`.
 PY ?= python
@@ -51,8 +51,12 @@ medical:
 	$(PY) -m family_fitness_ai.rag.medical
 
 ## ── 띄우고 보기 ────────────────────────────────────────────────────────
-## coach/messages 와 검색을 쓰려면 임베딩 서버도 띄운다:
-##   llama serve -hf gpustack/bge-m3-GGUF -hff bge-m3-Q8_0.gguf --embedding --port 8082
+## 임베딩 모델(bge-m3-Q8_0.gguf, 605 MB)을 한 번 받아 두고, 인덱스에 든 벡터와
+## 같게 나오는지 잰다. 받아 두면 serve 는 임베딩 서버 없이 뜬다.
+## 밖에 띄운 서버를 쓰려면 .env 에 EMBEDDING_BACKEND=http.
+embed-model:
+	$(PY) -m family_fitness_ai.rag.embed
+
 serve:
 	$(PY) -m uvicorn family_fitness_ai.api.app:app --reload --port 8000
 
