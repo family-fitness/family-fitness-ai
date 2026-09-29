@@ -29,16 +29,25 @@ def _day(offset: int) -> compose.Slot:
     return compose.Slot("일간", offset, 15, [{"ref": "p", "role": "주행자"}])
 
 
-def _ids(payload, phase: str, n: int) -> list[str]:
-    return [clip["id"] for clip in payload["클립"] if clip["단계"] == phase][:n]
+def _ids(payload, phase: str, n: int, taken: set[str] | None = None) -> list[str]:
+    """그 단계에서 앞에서부터 n 개. 늘리는 동작은 준비·정리 두 단계에 다 있어서,
+    다른 단계에서 이미 고른 이름은 건너뛴다 — 같은 동작을 하루에 두 번 고르지 않게."""
+    taken = taken if taken is not None else set()
+    out = []
+    for clip in payload["클립"]:
+        if clip["단계"] == phase and clip["이름"] not in taken and len(out) < n:
+            taken.add(clip["이름"])
+            out.append(clip["id"])
+    return out
 
 
 def _full(payload) -> list[dict[str, str]]:
-    """단계별 편수대로 앞에서부터 고른다."""
+    """단계별 편수대로 앞에서부터 고른다. 하루 안에서 이름이 겹치지 않는다."""
+    taken: set[str] = set()
     return [
         {"id": clip_id, "phase": phase}
         for phase, n in FIFTEEN.items()
-        for clip_id in _ids(payload, phase, n)
+        for clip_id in _ids(payload, phase, n, taken)
     ]
 
 
@@ -102,7 +111,10 @@ def test_a_short_pick_is_filled_from_the_list(monkeypatch: pytest.MonkeyPatch):
     picked: list[str] = []
 
     def plan(payload):
-        clips = [{"id": _ids(payload, phase, 1)[0], "phase": phase} for phase in catalog.PHASES]
+        taken: set[str] = set()
+        clips = [
+            {"id": _ids(payload, phase, 1, taken)[0], "phase": phase} for phase in catalog.PHASES
+        ]
         picked.extend(
             next(c["이름"] for c in payload["클립"] if c["id"] == row["id"]) for row in clips
         )

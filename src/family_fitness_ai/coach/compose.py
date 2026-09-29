@@ -577,6 +577,7 @@ def _by_rule(
             prescribed=prescribed,
             conditions=constraints.conditions(),
             exclude=used,
+            level=catalog.level_of(read.percentile),
         )
         flat = [(phase, clip) for phase in catalog.PHASES for clip in picked[phase]]
         if not flat:
@@ -665,6 +666,8 @@ def build(
             conditions=constraints.conditions(),
             factor=read.factor,
             prescribed=prescribed,
+            # 공단 영상에는 알맞은 체력수준이 적혀 있다. 대상 요인의 백분위로 맞춘다.
+            level=catalog.level_of(read.percentile),
         )
         if pool_notice:
             notices.append(pool_notice)
