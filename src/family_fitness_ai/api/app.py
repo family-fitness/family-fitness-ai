@@ -27,6 +27,7 @@ from family_fitness_ai.coach.compose import Constraints, RunProfile
 from family_fitness_ai.coach.runs import store
 from family_fitness_ai.common.errors import ApiError, temporarily_unavailable
 from family_fitness_ai.common.settings import settings
+from family_fitness_ai.rag import embed
 from family_fitness_ai.rag.index import missing_files
 from family_fitness_ai.stats.assess import Profile, assessment, trajectory
 from family_fitness_ai.video.videos import search_videos
@@ -47,6 +48,13 @@ async def lifespan(_: FastAPI) -> AsyncIterator[None]:
         raise RuntimeError(
             f"코퍼스 인덱스가 없다: {settings().index_dir} ({', '.join(absent)} 없음). "
             "data/index 를 배포에 실었는지 보라"
+        )
+    # 임베딩도 같은 까닭으로 띄울 때 본다. 모델을 올리지는 않는다 — 있는지만 본다.
+    reason = embed.missing()
+    if reason:
+        raise RuntimeError(
+            f"임베딩을 이 프로세스에서 돌릴 수 없다: {reason}. "
+            "밖에 띄운 서버를 쓰려면 EMBEDDING_BACKEND=http"
         )
     yield
 

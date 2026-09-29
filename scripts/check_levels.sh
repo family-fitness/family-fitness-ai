@@ -5,7 +5,7 @@
 #   RAW=1 ./scripts/check_levels.sh        # 응답 원문까지
 #   BASE=http://127.0.0.1:8001/v1 ./scripts/check_levels.sh
 #
-# 임베딩 서버(:8082)와 API 서버(:8000)가 떠 있어야 한다. 편성은 LLM 이 켜져 있으면
+# API 서버(:8000)가 떠 있어야 한다(임베딩은 그 안에서 돈다). 편성은 LLM 이 켜져 있으면
 # 한 번에 한 번씩 부른다 — 끄려면 서버를 COACH_LLM=0 으로 띄운다.
 set -euo pipefail
 BASE=${BASE:-http://127.0.0.1:8000/v1}

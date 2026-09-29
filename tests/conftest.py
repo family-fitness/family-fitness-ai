@@ -4,8 +4,8 @@
 시험 노릇을 못 한다. LLM 이 없을 때의 길(규칙 편성)이 늘 서 있어야 한다는 것도
 여기서 같이 지킨다.
 
-검색은 data/index 와 임베딩 서버가 있어야 돈다. 없으면 그 시험만 건너뛴다 —
-없다고 빨간 불을 켜지 않는다.
+검색은 data/index 와 임베딩이 있어야 돈다 — 이 프로세스 안의 모델이든(local) 밖에
+띄운 서버든(http). 없으면 그 시험만 건너뛴다. 없다고 빨간 불을 켜지 않는다.
 """
 
 from __future__ import annotations
@@ -37,6 +37,11 @@ def _has_index() -> bool:
 
 
 def _has_embedder() -> bool:
+    from family_fitness_ai.rag import embed
+
+    if embed.backend() == "local":
+        return not embed.missing()
+
     import httpx
 
     try:
@@ -47,4 +52,4 @@ def _has_embedder() -> bool:
 
 needs_release = pytest.mark.skipif(not _has_release(), reason="data/release 표가 없다")
 needs_index = pytest.mark.skipif(not _has_index(), reason="data/index 가 없다")
-needs_embedder = pytest.mark.skipif(not _has_embedder(), reason="임베딩 서버가 꺼져 있다")
+needs_embedder = pytest.mark.skipif(not _has_embedder(), reason="임베딩을 돌릴 수 없다")

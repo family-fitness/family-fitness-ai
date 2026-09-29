@@ -15,7 +15,7 @@
 |---|---|---|
 | 서비스 | **FastAPI** + uvicorn, **Pydantic** v2 | 요청 검증과 스키마를 한 곳에서 본다 |
 | 검색 | **FAISS** (IndexFlatIP) + **bge-m3** 임베딩 | 청크 4,251개라 전수 비교가 싸다. 코사인 그대로 |
-| 임베딩 서버 | **llama.cpp** (`--embedding`) · 밖에서 띄운다 | 인덱스를 만들 때 쓴 모델과 같아야 한다 |
+| 임베딩 | **llama-cpp-python** · 서비스 안에서 돈다 (`[embed]`) | 인덱스를 만든 바로 그 파일(`bge-m3-Q8_0.gguf`)을 읽어 벡터가 같게 나온다. 서버를 따로 띄우지 않는다 |
 | LLM | **Claude** (`claude-opus-5`) · **Gemini** (`gemini-flash-latest`) | 한쪽이 붐비면 다른 쪽으로 넘어간다 |
 | 표 만들기 | **pandas** · **numpy** · **openpyxl** | 원자료 67만 행 → 또래 분포·인증 기준 |
 | 영상 쪼개기 | 미리 읽어 둔 **OCR 화면 글자** | 유튜브에 다시 가지 않는다. 새로 읽을 때만 `ocrmac`(`[collect]`) |
@@ -28,18 +28,33 @@
 ## 빠르게 띄우기
 
 ```bash
-# 1. 가상환경과 의존성
+# 1. 가상환경과 의존성 — [embed] 는 C++ 을 빌드해 몇 분 걸린다
 python3 -m venv .venv && source .venv/bin/activate
-pip install -e ".[dev]"
+pip install -e ".[dev,embed]"
 
 # 2. 키 채우기 — 이름과 뜻은 .env.example 에 있다
 cp .env.example .env && $EDITOR .env
 
-# 3. 임베딩 서버 (검색·질문·편성에 필요하다)
-llama serve -hf gpustack/bge-m3-GGUF -hff bge-m3-Q8_0.gguf --embedding --port 8082
+# 3. 임베딩 모델을 한 번 받아 두고 인덱스와 맞는지 잰다 (605 MB, 처음 한 번만)
+make embed-model      # 「코사인 최소 1.00000」이 나오면 된다
 
-# 4. 서비스
+# 4. 서비스 — 임베딩 서버를 따로 띄우지 않는다
 make serve            # http://127.0.0.1:8000  · 문서는 /docs
+```
+
+모델은 검색이 처음 쓰일 때 올라온다(1초 안쪽). 평가·궤적만 부르면 올리지 않는다.
+밖에 띄운 llama.cpp 서버를 쓰고 싶으면 `.env` 에 `EMBEDDING_BACKEND=http` 를 적고
+예전처럼 띄운다.
+
+```bash
+llama serve -hf gpustack/bge-m3-GGUF -hff bge-m3-Q8_0.gguf --embedding --port 8082
+```
+
+**맥에서 `[embed]` 빌드가 SDK 헤더 오류로 깨지면** 셸이 `CC`·`CXX` 를 Homebrew
+LLVM 으로 잡아 둔 것이다. 애플 clang 으로 돌려 빌드한다.
+
+```bash
+CC=/usr/bin/clang CXX=/usr/bin/clang++ CMAKE_ARGS="-DGGML_METAL=on" pip install -e ".[dev,embed]"
 ```
 
 띄운 뒤 한 바퀴 돌려 눈으로 보려면:
@@ -153,7 +168,8 @@ make verify PY=.venv/bin/python        # 안 켰을 때
 
 test은 **LLM 을 부르지 않는다.** 부르면 돈이 들고, 답이 매번 달라 test 노릇을
 못 한다. LLM 이 없을 때의 길(규칙 편성)이 늘 서 있어야 한다는 것도 여기서 같이
-지킨다. `data/index` 나 임베딩 서버가 없으면 그 시험만 건너뛴다.
+지킨다. `data/index` 나 임베딩(모델 또는 서버)이 없으면 그 시험만 건너뛴다 —
+CI 는 `[embed]` 없이 돌아서 검색 시험을 건너뛴다.
 
 ---
 

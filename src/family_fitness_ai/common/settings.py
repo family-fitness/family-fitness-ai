@@ -14,7 +14,12 @@ ROOT = Path(__file__).resolve().parents[3]
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_file=ROOT / ".env", extra="ignore")
 
-    #: 임베딩 서버 (llama.cpp · bge-m3). 인덱스를 만들 때 쓴 것과 같아야 한다.
+    #: 임베딩을 어디서 돌리나. local 은 이 프로세스 안(llama-cpp-python), http 는
+    #: 밖에 띄운 서버다. 비우면 local. 어느 쪽이든 인덱스를 만든 모델과 같아야 한다.
+    embedding_backend: str = "local"
+    #: local 이 읽을 모델 파일. 비우면 허깅페이스 캐시의 gpustack/bge-m3-GGUF 다.
+    embedding_gguf: str = ""
+    #: http 일 때만 쓴다. llama.cpp 서버 (bge-m3).
     embedding_url: str = "http://127.0.0.1:8082"
     #: 검색이 이 아래면 근거로 치지 않는다.
     sim_threshold: float = 0.57
