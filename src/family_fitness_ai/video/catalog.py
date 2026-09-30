@@ -145,7 +145,11 @@ def clips() -> tuple[Clip, ...]:
 
 
 def _kspo() -> tuple[Clip, ...]:
-    """data/release/kspo_videos.csv (video.kspo 가 만든다). 없으면 유튜브만 쓴다."""
+    """data/release/kspo_videos.csv (video.kspo 가 만든다).
+
+    서버는 이 표가 없으면 뜨지 않는다(api.app 의 lifespan). 띄우지 않고 부를 때만
+    없을 수 있고, 그때는 유튜브만 쓴다.
+    """
     path = settings().release_dir / "kspo_videos.csv"
     if not path.exists():
         return ()
