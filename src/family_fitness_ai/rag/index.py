@@ -22,6 +22,17 @@ from family_fitness_ai.common.settings import settings
 FILES = ("corpus.faiss", "corpus.json", "corpus_meta.csv")
 
 
+#: 청크 본문 한 칸은 csv 기본 한도(128KB)를 넘을 수 있다. 한도는 C long 에 담기는
+#: 만큼만 올린다 — Windows 는 64비트 파이썬에서도 C long 이 32비트라, 파이썬 3.11 은
+#: sys.maxsize 를 넘기면 OverflowError 를 내고 코퍼스를 읽지 못했다.
+_CSV_FIELD_LIMIT = min(sys.maxsize, 2**31 - 1)
+
+
+def allow_long_fields() -> None:
+    """corpus_meta.csv 의 긴 칸을 읽을 수 있게 csv 한도를 올린다."""
+    csv.field_size_limit(_CSV_FIELD_LIMIT)
+
+
 def missing_files(directory: Path | None = None) -> list[str]:
     """없는 인덱스 파일 이름. 비어 있으면 갖춰진 것이다."""
     directory = directory or settings().index_dir
@@ -97,7 +108,7 @@ def corpus() -> Corpus:
     index = faiss.read_index(str(directory / "corpus.faiss"))
     meta = json.loads((directory / "corpus.json").read_text(encoding="utf-8"))
 
-    csv.field_size_limit(sys.maxsize)
+    allow_long_fields()
     chunks = []
     with (directory / "corpus_meta.csv").open(encoding="utf-8-sig", newline="") as fh:
         for row in csv.DictReader(fh):

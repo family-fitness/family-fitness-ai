@@ -180,11 +180,11 @@ def main() -> None:
     path = model_path(download=True)
     print(f"모델 {path.name} ({path.stat().st_size / 2**20:.0f} MB)")
 
-    from family_fitness_ai.rag.index import corpus
+    from family_fitness_ai.rag.index import allow_long_fields, corpus
 
     # 원문으로 견준다. corpus() 는 화면에 나갈 말로 고쳐 읽어서(「미달」→「참가」)
     # 인덱스를 만들 때의 글자와 다르다.
-    csv.field_size_limit(sys.maxsize)
+    allow_long_fields()
     meta = settings().index_dir / "corpus_meta.csv"
     with meta.open(encoding="utf-8-sig", newline="") as fh:
         texts = [row["text"] for row in csv.DictReader(fh)]
