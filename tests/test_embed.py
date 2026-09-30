@@ -128,3 +128,22 @@ def test_missing_is_empty_for_http(fresh):
     fresh.setattr(settings(), "embedding_backend", "http")
     fresh.setattr(embed, "find_spec", lambda name: None)
     assert embed.missing() == ""
+
+
+def test_warm_up_loads_the_model_now(fresh):
+    """띄울 때 올려 두면 첫 검색이 모델을 기다리지 않는다."""
+    fresh.setattr(settings(), "embedding_backend", "local")
+    counts = _fake_llama(fresh)
+    embed.warm_up()
+    assert counts["loaded"] == 1
+    embed.embed_one("체력")
+    assert counts["loaded"] == 1
+
+
+def test_warm_up_leaves_an_http_server_alone(fresh):
+    """밖의 서버는 저쪽이 이미 올려 두었다. 띄울 때 그 서버에 기대지 않는다."""
+    fresh.setattr(settings(), "embedding_backend", "http")
+    asked: list[object] = []
+    fresh.setattr(embed.httpx, "post", lambda *a, **k: asked.append(a))
+    embed.warm_up()
+    assert asked == []

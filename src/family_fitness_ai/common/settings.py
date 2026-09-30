@@ -21,6 +21,10 @@ class Settings(BaseSettings):
     embedding_gguf: str = ""
     #: http 일 때만 쓴다. llama.cpp 서버 (bge-m3).
     embedding_url: str = "http://127.0.0.1:8082"
+    #: local 모델을 띄울 때 올려 둘까. 켜 두면 첫 검색 · 질문이 모델 올리기(수 초)를
+    #: 기다리지 않는다 — BE 의 읽기 한도를 넘지 않게 운영에서는 켠다. --reload 로
+    #: 코드를 고칠 때마다 기다리기 싫으면 0 으로 끈다(make serve 가 끈다).
+    embedding_warmup: bool = True
     #: 검색이 이 아래면 근거로 치지 않는다.
     sim_threshold: float = 0.57
 
@@ -42,7 +46,7 @@ class Settings(BaseSettings):
     #: 공공데이터포털 키(디코딩한 것). 국민체력100 동영상을 새로 받을 때만 쓴다 — 서비스는 안 쓴다.
     data_go_kr_key: str = ""
 
-    @field_validator("coach_llm", mode="before")
+    @field_validator("coach_llm", "embedding_warmup", mode="before")
     @classmethod
     def _empty_is_default(cls, value: object) -> object:
         """.env 는 이름만 적고 값을 비워 두는 일이 잦다. 빈 값은 기본값이다."""

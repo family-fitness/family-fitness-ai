@@ -27,6 +27,7 @@ def ready(monkeypatch: pytest.MonkeyPatch) -> pytest.MonkeyPatch:
     """인덱스와 임베딩은 갖춰졌다고 친다. 여기서는 release 표만 본다."""
     monkeypatch.setattr(api, "missing_files", lambda: [])
     monkeypatch.setattr(api.embed, "missing", lambda: "")
+    monkeypatch.setattr(settings(), "embedding_warmup", False)
     return monkeypatch
 
 
@@ -57,3 +58,20 @@ def test_a_missing_kspo_table_alone_stops_it(ready, tmp_path):
 
 def test_the_repository_carries_every_release_table():
     assert release.missing_files() == []
+
+
+def test_it_loads_the_embedding_model_before_taking_requests(ready, monkeypatch):
+    warmed: list[bool] = []
+    monkeypatch.setattr(settings(), "embedding_warmup", True)
+    monkeypatch.setattr(api.embed, "warm_up", lambda: warmed.append(True))
+    _start()
+    assert warmed == [True]
+
+
+def test_warming_up_can_be_turned_off(ready, monkeypatch):
+    """--reload 로 코드를 고칠 때마다 모델을 기다리지 않게 끌 수 있다."""
+    warmed: list[bool] = []
+    monkeypatch.setattr(settings(), "embedding_warmup", False)
+    monkeypatch.setattr(api.embed, "warm_up", lambda: warmed.append(True))
+    _start()
+    assert warmed == []

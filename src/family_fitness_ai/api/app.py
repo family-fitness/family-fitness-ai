@@ -6,6 +6,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import logging
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
@@ -58,13 +59,17 @@ async def lifespan(_: FastAPI) -> AsyncIterator[None]:
             f"release 표가 없다: {settings().release_dir} ({', '.join(absent)} 없음). "
             "data/release 를 배포에 실었는지 보라"
         )
-    # 임베딩도 같은 까닭으로 띄울 때 본다. 모델을 올리지는 않는다 — 있는지만 본다.
+    # 임베딩도 같은 까닭으로 띄울 때 본다. 여기서는 있는지만 보고, 올리는 것은 아래다.
     reason = embed.missing()
     if reason:
         raise RuntimeError(
             f"임베딩을 이 프로세스에서 돌릴 수 없다: {reason}. "
             "밖에 띄운 서버를 쓰려면 EMBEDDING_BACKEND=http"
         )
+    # 모델을 요청을 받기 전에 올린다. 첫 검색이 모델을 기다리느라 BE 의 읽기 한도를
+    # 넘었다. 스레드에서 올려 이벤트 루프를 붙잡지 않는다.
+    if settings().embedding_warmup:
+        await asyncio.to_thread(embed.warm_up)
     yield
 
 

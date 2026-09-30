@@ -64,8 +64,9 @@ medical:
 embed-model:
 	$(PY) -m family_fitness_ai.rag.embed
 
+## 개발용. 코드를 고칠 때마다 다시 뜨니 모델은 처음 쓸 때 올린다(EMBEDDING_WARMUP=0).
 serve:
-	$(PY) -m uvicorn family_fitness_ai.api.app:app --reload --port 8000
+	EMBEDDING_WARMUP=0 $(PY) -m uvicorn family_fitness_ai.api.app:app --reload --port 8000
 
 ## 돌고 있는 서비스에 요청을 보내 눈으로 확인한다. `make serve` 를 먼저 띄운다.
 probe:
