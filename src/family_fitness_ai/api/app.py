@@ -192,6 +192,7 @@ def post_run(body: RunIn) -> dict[str, object]:
         no_props=body.constraints.no_props,
         focus_factor=body.constraints.focus_factor,
         with_companion=body.constraints.with_companion,
+        recent_video_ids=tuple(body.constraints.recent_video_ids),
     )
     run = store.start(profiles, body.period.start_date, body.period.weeks, constraints)
     return {"run_id": run.run_id, "status": run.status, "poll_after_ms": 1500}

@@ -116,6 +116,13 @@ class Constraints:
     focus_factor: str | None = None
     #: 보호자도 같이 한다. 참여자는 그대로고, LLM 코치가 문구를 쓸 때만 본다.
     with_companion: bool = False
+    #: 그 사람이 최근 14일 동안 미션으로 받은 영상 id(유튜브 id 또는 공단 파일 이름),
+    #: 최근 것부터. 후보를 고를 때 뒤로 미룬다 — 다른 후보가 모자랄 때만 다시 쓴다.
+    recent_video_ids: tuple[str, ...] = ()
+
+    @property
+    def recent(self) -> frozenset[str]:
+        return frozenset(self.recent_video_ids)
 
     def conditions(self) -> catalog.Conditions:
         return catalog.Conditions(
@@ -423,6 +430,7 @@ def _by_llm(
     tally: Tally,
 ) -> list[dict[str, Any]] | None:
     ids = {f"c{index}": clip for index, clip in enumerate(pool)}
+    recent = constraints.recent
     payload = {
         "참여자": _brief(read),
         "조건": {
@@ -461,6 +469,7 @@ def _by_llm(
                 "조용": clip.quiet,
                 "좁은공간": clip.home_ok,
                 "도구": clip.needs_props,
+                "최근": clip.video_id in recent,
             }
             for key, clip in ids.items()
         ],
@@ -469,7 +478,9 @@ def _by_llm(
             f"day_offset 이 {WEEKLY_SLOT} 인 자리는 주간 미션으로, 그 주 안에 한 번 "
             "길게 온 가족이 함께 한다 — 날짜를 정하지 않는다. "
             "자리의 단계별_편수만큼만 고른다 — 화면에서 한 편을 여러 세트 반복해 "
-            "시간을 채우므로 영상 길이의 합을 분에 맞출 필요가 없다."
+            "시간을 채우므로 영상 길이의 합을 분에 맞출 필요가 없다. "
+            "최근 이 true 인 클립은 이 사람이 요즘 받은 영상이다 — 같은 단계·요인의 다른 "
+            "클립이 모자랄 때만 고른다."
         ),
     }
 
@@ -636,6 +647,10 @@ def _by_rule(
             conditions=constraints.conditions(),
             exclude=used,
             level=catalog.level_of(read.percentile),
+            # BE 는 하루씩 부른다. 날짜로 섞고 최근에 받은 영상을 미뤄 날마다 같은
+            # 영상이 나오지 않게 한다.
+            seed=start_date.isoformat(),
+            recent=constraints.recent,
         )
         flat = [(phase, clip) for phase in catalog.PHASES for clip in picked[phase]]
         if not flat:
@@ -740,6 +755,8 @@ def build(
             prescribed=prescribed,
             # 공단 영상에는 알맞은 체력수준이 적혀 있다. 대상 요인의 백분위로 맞춘다.
             level=catalog.level_of(read.percentile),
+            seed=start_date.isoformat(),
+            recent=constraints.recent,
         )
         if pool_notice:
             notices.append(pool_notice)

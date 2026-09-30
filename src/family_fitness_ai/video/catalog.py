@@ -13,6 +13,7 @@
 from __future__ import annotations
 
 import csv
+import hashlib
 from collections.abc import Callable
 from dataclasses import dataclass
 from functools import lru_cache
@@ -213,7 +214,7 @@ def level_of(percentile: int | None) -> int | None:
 
 @dataclass(frozen=True)
 class Conditions:
-    """부모가 고른 조건. 고른 것만 좁히고 나머지는 건드리지 않는다."""
+    """보호자가 고른 조건. 고른 것만 좁히고 나머지는 건드리지 않는다."""
 
     quiet: bool = False
     small_space: bool = False
@@ -249,17 +250,69 @@ def _rank(
     return score, abs(clip.duration_sec - SET_SECONDS)
 
 
-def _age_rank(
-    age_group: str, factor: str, prescribed: set[str], level: int | None
-) -> Callable[[Clip], tuple[int, int, int]]:
-    """_rank 에 「제 연령대 먼저」를 끼운다. 같은 순위면 제 연령대 라벨이 붙은 영상이
-    함께 쓰는 연령대(어르신에게 성인) 영상보다 앞선다."""
+def _shuffle(clip: Clip, seed: str) -> str:
+    """같은 순위끼리의 차례. 시드(편성 시작일)가 바뀌면 바뀌고, 같으면 늘 같다.
 
-    def rank(clip: Clip) -> tuple[int, int, int]:
+    BE 는 하루씩 편성을 부른다. 순위만으로 고르면 같은 아이 · 같은 조건에 날마다 같은
+    영상이 나온다. 파이썬 hash() 는 프로세스마다 달라 되짚을 수 없어 쓰지 않는다.
+    """
+    if not seed:
+        return ""
+    key = f"{seed}|{clip.video_id}|{clip.start_sec}".encode()
+    return hashlib.blake2b(key, digest_size=8).hexdigest()
+
+
+def _age_rank(
+    age_group: str, factor: str, prescribed: set[str], level: int | None, seed: str = ""
+) -> Callable[[Clip], tuple[int, int, int, str, int]]:
+    """_rank 에 「제 연령대 먼저」를 끼운다. 같은 순위면 제 연령대 라벨이 붙은 영상이
+    함께 쓰는 연령대(어르신에게 성인) 영상보다 앞선다.
+
+    그다음은 길이를 30초 단위로 거칠게 보고, 같은 칸끼리는 시드로 섞는다. 한 세트로
+    삼기 좋은 길이를 앞세우는 것은 그대로 두면서 날마다 다른 것이 앞에 오게 한다.
+    """
+
+    def rank(clip: Clip) -> tuple[int, int, int, str, int]:
         score, distance = _rank(clip, factor, prescribed, level)
-        return score, int(clip.age_group != age_group), distance
+        return (
+            score,
+            int(clip.age_group != age_group),
+            distance // 30,
+            _shuffle(clip, seed),
+            distance,
+        )
 
     return rank
+
+
+def _defer_recent(ranked: list[Clip], factor: str, recent: frozenset[str]) -> list[Clip]:
+    """최근에 받은 영상을 뒤로 미룬다. 빼지는 않는다.
+
+    단계마다 따로 본다. 대상 요인에 맞는 최근 영상은 같은 요인의 새 후보가 다 선
+    뒤에, 요인이 다른 최근 영상은 그 단계 맨 뒤에 선다. 새 후보가 모자라면 그대로
+    다시 쓰인다. 단계가 서 있던 자리는 바꾸지 않는다 — 목록을 자르는 곳(pool 의
+    limit)에서 단계별 몫이 달라지지 않게.
+    """
+    if not recent:
+        return ranked
+    out = list(ranked)
+    for phase in {clip.phase for clip in ranked}:
+        places = [i for i, clip in enumerate(ranked) if clip.phase == phase]
+        group = [ranked[i] for i in places]
+        matches = [not factor or clip.fitness_factor == factor for clip in group]
+        fresh = [c for c in group if c.video_id not in recent]
+        stale_match = [c for c, m in zip(group, matches, strict=True) if m and c.video_id in recent]
+        stale_other = [
+            c for c, m in zip(group, matches, strict=True) if not m and c.video_id in recent
+        ]
+        last_match = max(
+            (i for i, c in enumerate(fresh) if not factor or c.fitness_factor == factor),
+            default=-1,
+        )
+        reordered = fresh[: last_match + 1] + stale_match + fresh[last_match + 1 :] + stale_other
+        for place, clip in zip(places, reordered, strict=True):
+            out[place] = clip
+    return out
 
 
 def prescribed_names(chunks: list[Chunk]) -> set[str]:
@@ -278,6 +331,8 @@ def routine(
     conditions: Conditions | None = None,
     exclude: set[str] | None = None,
     level: int | None = None,
+    seed: str = "",
+    recent: frozenset[str] = frozenset(),
 ) -> dict[str, list[Clip]]:
     """한 회분 클립을 단계별로 고른다.
 
@@ -286,12 +341,15 @@ def routine(
 
     같은 동작을 두 번 넣지 않는다. 조건에 걸려 남는 클립이 없으면 그 단계는 빈
     채로 둔다 — 조건을 몰래 풀어 아무거나 채우지 않는다.
+
+    seed(편성 시작일)로 같은 순위끼리 섞고, recent(최근에 받은 영상 id)는 뒤로
+    미룬다(_defer_recent). 둘 다 비우면 예전과 같은 차례다.
     """
     conditions = conditions or Conditions()
     prescribed = prescribed or set()
     ages = ages_for(age_group)
     pool = [clip for clip in clips() if clip.age_group in ages and _fits(clip, conditions)]
-    rank = _age_rank(age_group, factor, prescribed, level)
+    rank = _age_rank(age_group, factor, prescribed, level, seed)
 
     want = clip_counts(minutes)
     picked: dict[str, list[Clip]] = {phase: [] for phase in PHASES}
@@ -302,7 +360,7 @@ def routine(
         if candidates and all(clip.title in used for clip in candidates):
             # 뺄 것을 빼고 나니 남는 게 없다. 그 단계만 처음으로 되돌린다.
             used -= {clip.title for clip in candidates}
-        for clip in sorted(candidates, key=rank):
+        for clip in _defer_recent(sorted(candidates, key=rank), factor, recent):
             if clip.title in used:
                 continue
             picked[phase].append(clip)
@@ -320,6 +378,8 @@ def pool(
     prescribed: set[str] | None = None,
     limit: int = 120,
     level: int | None = None,
+    seed: str = "",
+    recent: frozenset[str] = frozenset(),
 ) -> tuple[list[Clip], str]:
     """고를 만한 클립과, 또래 밖까지 갔는지 알리는 말.
 
@@ -328,6 +388,9 @@ def pool(
     붙은 편이 많지 않아 또래만 고집하면 여덟 살에게 아무것도 못 준다. 라벨이
     다른 클립도 뒤에 세워 두고, 그런 것이 섞였으면 그 사실을 말로 돌려준다 —
     쓸지 말지는 화면 저쪽에서 정한다.
+
+    seed · recent 는 routine 과 같다. 최근에 받은 영상은 이름이 같은 다른 클립보다도
+    뒤로 가므로, 이름마다 하나만 남길 때(_distinct) 새 영상 쪽이 남는다.
     """
     conditions = conditions or Conditions()
     prescribed = prescribed or set()
@@ -336,9 +399,9 @@ def pool(
     ages = ages_for(age_group)
     same = [clip for clip in fitting if clip.age_group in ages]
     other = [clip for clip in fitting if clip.age_group not in ages]
-    rank = _age_rank(age_group, factor, prescribed, level)
-    same.sort(key=rank)
-    other.sort(key=rank)
+    rank = _age_rank(age_group, factor, prescribed, level, seed)
+    same = _defer_recent(sorted(same, key=rank), factor, recent)
+    other = _defer_recent(sorted(other, key=rank), factor, recent)
     # 또래가 모자란지는 합치기 전 클립 수로 본다. 합친 뒤의 수로 보면 조건을 켠
     # 유소년·성인이 60 밑으로 내려가, 전에 없던 다른 연령대가 섞이고 알림이 뜬다.
     short = len(same) < limit // 2

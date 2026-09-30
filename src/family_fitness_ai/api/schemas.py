@@ -17,6 +17,9 @@ Role = Literal["주행자", "동반자", "응원"]
 
 Measurements = dict[str, float]
 
+#: recent_video_ids 를 몇 개까지 보나.
+RECENT_LIMIT = 60
+
 
 def _no_blood_pressure(values: Measurements | None) -> Measurements | None:
     if not values:
@@ -93,6 +96,16 @@ class ConstraintsIn(BaseModel):
     focus_factor: str | None = None
     #: 보호자도 같이 한다. 참여자를 늘리지는 않는다 — LLM 코치에게 알려 문구에만 반영한다.
     with_companion: bool = False
+    #: 그 사람이 최근 14일 동안 미션으로 받은 영상 id(유튜브 id 또는 공단 파일 이름),
+    #: 최근 것부터. 후보를 고를 때 뒤로 미룬다. 모르는 id 는 고를 때 걸리지 않을 뿐이다.
+    recent_video_ids: list[str] = Field(default_factory=list)
+
+    @field_validator("recent_video_ids")
+    @classmethod
+    def _recent_first(cls, value: list[str]) -> list[str]:
+        # 약속은 최근 것부터 60개까지다. 더 오면 거절하지 않고 앞의 60개만 본다 —
+        # 편성이 통째로 떨어지는 것보다 오래된 몇 개를 덜 미루는 편이 낫다.
+        return [video_id for video_id in value if video_id][:RECENT_LIMIT]
 
     @field_validator("focus_factor")
     @classmethod
