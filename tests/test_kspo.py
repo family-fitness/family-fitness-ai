@@ -9,6 +9,7 @@ API 를 부르지 않는다. 받아 둔 원자료에서 사례마다 한 영상�
 from __future__ import annotations
 
 import json
+import traceback
 from datetime import date
 from functools import lru_cache
 from pathlib import Path
@@ -372,3 +373,48 @@ def test_video_search_gives_seniors_the_adult_kspo_clips():
     adult = kspo_hits("성인", ("유연성",), ())
     assert senior
     assert {h["video_id"] for h in senior} == {h["video_id"] for h in adult}
+
+
+# ── 받기: 키가 로그 · 오류 문구에 남지 않는다 ────────────────────────────────
+# 공공데이터포털 키는 serviceKey 로 요청 주소에 들어간다. httpx 는 요청마다 INFO 로
+# 「HTTP Request: GET …?serviceKey=…」를 남기고, raise_for_status 의 오류 문구에도 주소를
+# 통째로 적는다. 로깅을 켠 곳(uvicorn · CI)에서 받으면 키가 그대로 남는다.
+
+SECRET = "not-a-real-key-1234"
+
+
+def _mock_get(monkeypatch: pytest.MonkeyPatch, status: int, body: dict) -> list[str]:
+    import httpx
+
+    urls: list[str] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        urls.append(str(request.url))
+        return httpx.Response(status, json=body)
+
+    client = httpx.Client(transport=httpx.MockTransport(handler))
+    monkeypatch.setattr(kspo.httpx, "get", lambda url, **kw: client.get(url, **kw))
+    monkeypatch.setattr(kspo.time, "sleep", lambda _: None)
+    return urls
+
+
+def test_fetching_does_not_log_the_key(monkeypatch, caplog):
+    body = {"response": {"body": {"totalCount": 1, "items": {"item": [{"file_nm": "a.mp4"}]}}}}
+    urls = _mock_get(monkeypatch, 200, body)
+    caplog.set_level("DEBUG")
+    rows = kspo.fetch(kspo.GUIDE, SECRET)
+    assert rows == [{"file_nm": "a.mp4"}]
+    assert SECRET in urls[0]  # 키는 주소로 간다
+    assert SECRET not in caplog.text
+
+
+def test_a_failed_fetch_does_not_show_the_key(monkeypatch, caplog):
+    _mock_get(monkeypatch, 401, {})
+    caplog.set_level("DEBUG")
+    with pytest.raises(BaseException) as failed:
+        kspo.fetch(kspo.GUIDE, SECRET)
+    # 받다 넘어지면 터미널 · CI 로그에 찍히는 것은 이 traceback 이다.
+    shown = "".join(traceback.format_exception(failed.value))
+    assert "401" in shown
+    assert SECRET not in shown
+    assert SECRET not in caplog.text

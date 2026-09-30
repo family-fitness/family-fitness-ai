@@ -39,6 +39,7 @@ import argparse
 import collections
 import csv
 import json
+import logging
 import math
 import re
 import time
@@ -342,16 +343,47 @@ def _video(
 
 
 def fetch(op: str, key: str) -> list[dict[str, Any]]:
-    """조회 하나를 끝까지 받는다. 한 번에 천 줄씩."""
+    """조회 하나를 끝까지 받는다. 한 번에 천 줄씩.
+
+    키는 serviceKey 로 요청 주소에 들어간다. httpx 는 요청마다 INFO 로 주소를 통째로
+    남기고, raise_for_status 의 오류 문구에도 주소를 적는다. 로깅이 켜진 곳에서 받으면
+    키가 로그에 남으므로, 받는 동안 httpx 로그를 WARNING 으로 낮추고 오류는 주소 없이
+    다시 낸다.
+    """
+    quiet = logging.getLogger("httpx")
+    before = quiet.level
+    quiet.setLevel(logging.WARNING)
+    try:
+        return _fetch(op, key)
+    finally:
+        quiet.setLevel(before)
+
+
+def _fetch(op: str, key: str) -> list[dict[str, Any]]:
     rows: list[dict[str, Any]] = []
     page, total = 1, None
     while total is None or len(rows) < total:
-        response = httpx.get(
-            API + op,
-            params={"serviceKey": key, "pageNo": page, "numOfRows": 1000, "resultType": "json"},
-            timeout=60,
-        )
-        response.raise_for_status()
+        try:
+            response = httpx.get(
+                API + op,
+                params={
+                    "serviceKey": key,
+                    "pageNo": page,
+                    "numOfRows": 1000,
+                    "resultType": "json",
+                },
+                timeout=60,
+            )
+            response.raise_for_status()
+        except httpx.HTTPStatusError as error:
+            # 원래 오류는 주소(키 포함)를 문구에 담는다. 이어 붙이지 않는다.
+            raise RuntimeError(
+                f"{OPS.get(op, op)} {page}쪽 받기 실패 — HTTP {error.response.status_code}"
+            ) from None
+        except httpx.HTTPError as error:
+            raise RuntimeError(
+                f"{OPS.get(op, op)} {page}쪽 받기 실패 — {type(error).__name__}"
+            ) from None
         body = response.json()["response"]["body"]
         total = int(body["totalCount"])
         items = body["items"]
