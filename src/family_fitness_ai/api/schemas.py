@@ -8,7 +8,7 @@ from typing import Annotated, Literal
 from pydantic import BaseModel, Field, field_validator
 
 from family_fitness_ai.common.errors import item_not_allowed
-from family_fitness_ai.common.items import BLOOD_PRESSURE
+from family_fitness_ai.common.items import BLOOD_PRESSURE, FACTORS
 
 Sex = Literal["M", "F"]
 AgeUnit = Literal["세", "개월"]
@@ -88,6 +88,22 @@ class ConstraintsIn(BaseModel):
     small_space: bool = False
     #: 도구 없이 몸으로만.
     no_props: bool = False
+    #: 보호자가 키워 주고 싶은 역량. 여덟 요인의 한글 이름(예: 유연성). 있으면 측정으로
+    #: 고른 가장 낮은 요인보다 먼저 쓴다. 비우면 지금처럼 측정으로 고른다.
+    focus_factor: str | None = None
+    #: 보호자도 같이 한다. 참여자를 늘리지는 않는다 — LLM 코치에게 알려 문구에만 반영한다.
+    with_companion: bool = False
+
+    @field_validator("focus_factor")
+    @classmethod
+    def _known_factor(cls, value: str | None) -> str | None:
+        # 빈 글자는 안 고른 것으로 본다. 모르는 요인은 받지 않는다 — 조용히 버리면
+        # 보호자가 고른 것이 편성에 안 들어갔는데도 들어간 줄 안다.
+        if not value:
+            return None
+        if value not in FACTORS:
+            raise ValueError(f"{' · '.join(FACTORS)} 중 하나여야 합니다")
+        return value
 
 
 class RunIn(BaseModel):

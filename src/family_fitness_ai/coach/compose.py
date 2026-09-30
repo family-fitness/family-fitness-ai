@@ -112,6 +112,10 @@ class Constraints:
     quiet: bool = False
     small_space: bool = False
     no_props: bool = False
+    #: 보호자가 키워 주고 싶은 역량. 있으면 측정으로 고른 가장 낮은 요인보다 앞선다.
+    focus_factor: str | None = None
+    #: 보호자도 같이 한다. 참여자는 그대로고, LLM 코치가 문구를 쓸 때만 본다.
+    with_companion: bool = False
 
     def conditions(self) -> catalog.Conditions:
         return catalog.Conditions(
@@ -174,12 +178,26 @@ class Read:
     rows: list[dict[str, Any]]
     chunks: list[Chunk]
     notices: list[str]
+    #: 대상 요인을 보호자가 골랐나. False 면 측정으로 고른 가장 낮은 요인이다.
+    focused: bool = False
 
 
-def target_factor(profile: RunProfile) -> tuple[str, str, int | None, list[dict[str, Any]]]:
-    """가장 낮은 요인과 그 band·백분위. 측정이 없으면 빈 채로 돌아온다."""
+def target_factor(
+    profile: RunProfile, focus: str | None = None
+) -> tuple[str, str, int | None, list[dict[str, Any]]]:
+    """대상 요인과 그 band·백분위.
+
+    보호자가 키워 주고 싶은 역량(focus)이 있으면 그것이 대상이다. 그 요인을 쟀으면
+    band·백분위도 함께 내고, 안 쟀으면 빈 채로 낸다. 없으면 측정에서 가장 낮은
+    요인을 고르고, 측정도 없으면 전부 빈 채로 돌아온다.
+    """
     rows, _ = factor_rows(profile.profile())
     graded = [row for row in rows if row["percentile"] is not None]
+    if focus:
+        mine = next((row for row in graded if row["factor"] == focus), None)
+        if mine is None:
+            return focus, "", None, rows
+        return focus, str(mine["band"]), int(mine["percentile"]), rows
     if not graded:
         return "", "", None, rows
     low = min(graded, key=lambda row: int(row["percentile"]))
@@ -240,10 +258,10 @@ def _prescriptions(profile: RunProfile, factor: str, band: str) -> tuple[list[Ch
     return [], []
 
 
-def read_profile(profile: RunProfile) -> Read:
-    factor, band, percentile, rows = target_factor(profile)
+def read_profile(profile: RunProfile, focus: str | None = None) -> Read:
+    factor, band, percentile, rows = target_factor(profile, focus)
     chunks, notices = _prescriptions(profile, factor, band)
-    return Read(profile, factor, band, percentile, rows, chunks, notices)
+    return Read(profile, factor, band, percentile, rows, chunks, notices, focused=bool(focus))
 
 
 def _brief(read: Read) -> dict[str, Any]:
@@ -264,6 +282,11 @@ def _brief(read: Read) -> dict[str, Any]:
         "성별": read.profile.sex,
         "연령대": read.profile.age_group,
         "대상_체력요인": read.factor or None,
+        "대상_요인을_고른_까닭": (
+            "보호자가 키워 주고 싶은 역량"
+            if read.focused
+            else ("측정 결과로 고른 요인" if read.factor else None)
+        ),
         "측정": measured,
     }
 
@@ -279,6 +302,8 @@ def _rule_copy(read: Read, constraints: Constraints, slot: Slot) -> dict[str, st
     )
     if read.factor and read.band:
         parent = f"{words.factor_copy(read.factor, read.band)}. {where}이면 충분합니다"
+    elif read.focused:
+        parent = f"키워 주고 싶다고 하신 {read.factor}에 맞춰 {where}으로 짰습니다"
     else:
         parent = f"{where}으로 짰습니다. 측정을 하면 요인을 짚어 드릴 수 있습니다"
     return {"child": child, "parent": parent}
@@ -382,6 +407,7 @@ def _by_llm(
             "조용히": constraints.quiet,
             "좁은_공간": constraints.small_space,
             "도구_없이": constraints.no_props,
+            "보호자도_함께": constraints.with_companion,
         },
         "자리": [
             {
@@ -621,14 +647,28 @@ def build(
             "no_relevant_source",
         )
 
-    reads = [read_profile(mover) for mover in movers]
+    # 보호자가 키워 주고 싶은 역량은 일간을 받는 사람(주행자) 몫이다. 동반자는
+    # 제 몫을 따로 받지 않으니 측정으로 고른 요인을 그대로 둔다.
+    steering = {id(p) for p in movers if p.role == "주행자"} or {id(movers[0])}
+    reads = [
+        read_profile(mover, constraints.focus_factor if id(mover) in steering else None)
+        for mover in movers
+    ]
     driver = next((r for r in reads if r.profile.role == "주행자"), reads[0])
     measured = [r for r in reads if r.percentile is not None]
-    assess_summary = (
-        f"{driver.factor} 백분위 {driver.percentile} · 대상 요인 = {driver.factor}"
-        if driver.percentile is not None
-        else f"연령대 {driver.profile.age_group} · 만 {driver.profile.age}세 · 측정값 없음"
-    )
+    if driver.focused:
+        scored = (
+            f"{driver.factor} 백분위 {driver.percentile}"
+            if driver.percentile is not None
+            else f"{driver.factor} 측정값 없음"
+        )
+        assess_summary = f"{scored} · 대상 요인 = {driver.factor}(보호자가 고름)"
+    elif driver.percentile is not None:
+        assess_summary = f"{driver.factor} 백분위 {driver.percentile} · 대상 요인 = {driver.factor}"
+    else:
+        assess_summary = (
+            f"연령대 {driver.profile.age_group} · 만 {driver.profile.age}세 · 측정값 없음"
+        )
     if len(reads) > 1:
         assess_summary += f" · 편성 대상 {len(reads)}명(측정 {len(measured)}명)"
     steps = [Step(1, "assess", "ok", assess_summary)]

@@ -179,3 +179,77 @@ def test_the_same_exercise_does_not_come_back_in_the_same_week():
     assert plan.proposal is not None
     names = [s["exercise_name"] for m in plan.proposal["missions"] for s in m["sessions"]]
     assert len(names) == len(set(names))
+
+
+# ── 보호자가 키워 주고 싶은 역량 ──────────────────────────────────────────
+
+
+def _other_than_lowest() -> tuple[str, str]:
+    """측정으로 고른 가장 낮은 요인과, 그것과 다른 요인 하나."""
+    lowest, _, _, rows = compose.target_factor(CHILD)
+    measured = [str(row["factor"]) for row in rows if row["percentile"] is not None]
+    other = next(factor for factor in measured if factor != lowest)
+    return lowest, other
+
+
+def test_the_guardians_focus_comes_before_the_lowest_factor():
+    lowest, focus = _other_than_lowest()
+    factor, band, percentile, _ = compose.target_factor(CHILD, focus)
+    assert factor == focus != lowest
+    # 잰 요인이면 그 요인의 band·백분위를 함께 낸다.
+    assert band and percentile is not None
+
+
+def test_a_focus_that_was_not_measured_still_leads():
+    factor, band, percentile, _ = compose.target_factor(CHILD, "평형성")
+    assert (factor, band, percentile) == ("평형성", "", None)
+
+
+def test_the_rule_plan_follows_the_focus():
+    _, focus = _other_than_lowest()
+    plan = compose.build([CHILD], date(2026, 9, 7), 1, compose.Constraints(focus_factor=focus))
+    assert plan.proposal is not None
+    assert f"대상 요인 = {focus}(보호자가 고름)" in plan.steps[0].summary
+    assert all(focus in m["title"] for m in plan.proposal["missions"])
+
+
+def test_the_coach_is_told_the_focus_and_the_companion(monkeypatch: pytest.MonkeyPatch):
+    _, focus = _other_than_lowest()
+    monkeypatch.setattr(compose.coach_llm, "enabled", lambda: True)
+    monkeypatch.setattr(compose.coach_llm, "plan_week", _fake_plan(None))
+    compose.build(
+        [CHILD],
+        date(2026, 9, 7),
+        1,
+        compose.Constraints(focus_factor=focus, with_companion=True),
+    )
+    seen = _fake_plan.seen
+    assert seen["참여자"]["대상_체력요인"] == focus
+    assert seen["참여자"]["대상_요인을_고른_까닭"] == "보호자가 키워 주고 싶은 역량"
+    assert seen["조건"]["보호자도_함께"] is True
+
+
+def test_without_a_focus_the_lowest_factor_stays(monkeypatch: pytest.MonkeyPatch):
+    lowest, _ = _other_than_lowest()
+    monkeypatch.setattr(compose.coach_llm, "enabled", lambda: True)
+    monkeypatch.setattr(compose.coach_llm, "plan_week", _fake_plan(None))
+    plan = compose.build([CHILD], date(2026, 9, 7), 1, compose.Constraints())
+    assert _fake_plan.seen["참여자"]["대상_체력요인"] == lowest
+    assert _fake_plan.seen["참여자"]["대상_요인을_고른_까닭"] == "측정 결과로 고른 요인"
+    assert "보호자가 고름" not in plan.steps[0].summary
+
+
+def test_the_focus_is_the_drivers_not_the_companions(monkeypatch: pytest.MonkeyPatch):
+    reads: list[compose.Read] = []
+    original = compose.read_profile
+
+    def spy(profile, focus=None):
+        read = original(profile, focus)
+        reads.append(read)
+        return read
+
+    monkeypatch.setattr(compose, "read_profile", spy)
+    compose.build(_family(), date(2026, 9, 21), 1, compose.Constraints(focus_factor="평형성"))
+    by_role = {read.profile.role: read for read in reads}
+    assert by_role["주행자"].focused and by_role["주행자"].factor == "평형성"
+    assert not by_role["동반자"].focused
