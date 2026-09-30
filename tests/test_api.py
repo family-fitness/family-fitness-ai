@@ -99,7 +99,7 @@ def test_the_guardians_focus_leads_the_run():
         }
     )
     assert state["status"] == "succeeded", state
-    assert "대상 요인 = 평형성(보호자가 고름)" in state["steps"][0]["summary"]
+    assert "대상 요인 = 평형성(보호자가 키워 주고 싶은 역량)" in state["steps"][0]["summary"]
 
 
 def test_video_search_needs_a_factor_or_a_name():

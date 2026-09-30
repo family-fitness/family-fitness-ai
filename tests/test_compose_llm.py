@@ -209,7 +209,7 @@ def test_the_rule_plan_follows_the_focus():
     _, focus = _other_than_lowest()
     plan = compose.build([CHILD], date(2026, 9, 7), 1, compose.Constraints(focus_factor=focus))
     assert plan.proposal is not None
-    assert f"대상 요인 = {focus}(보호자가 고름)" in plan.steps[0].summary
+    assert f"대상 요인 = {focus}(보호자가 키워 주고 싶은 역량)" in plan.steps[0].summary
     assert all(focus in m["title"] for m in plan.proposal["missions"])
 
 
@@ -235,8 +235,9 @@ def test_without_a_focus_the_lowest_factor_stays(monkeypatch: pytest.MonkeyPatch
     monkeypatch.setattr(compose.coach_llm, "plan_week", _fake_plan(None))
     plan = compose.build([CHILD], date(2026, 9, 7), 1, compose.Constraints())
     assert _fake_plan.seen["참여자"]["대상_체력요인"] == lowest
-    assert _fake_plan.seen["참여자"]["대상_요인을_고른_까닭"] == "측정 결과로 고른 요인"
-    assert "보호자가 고름" not in plan.steps[0].summary
+    assert _fake_plan.seen["참여자"]["대상_요인을_고른_까닭"] == "지금 키우기 좋은 영역"
+    assert "보호자가 키워 주고 싶은 역량" not in plan.steps[0].summary
+    assert f"대상 요인 = {lowest}(지금 키우기 좋은 영역)" in plan.steps[0].summary
 
 
 def test_the_focus_is_the_drivers_not_the_companions(monkeypatch: pytest.MonkeyPatch):

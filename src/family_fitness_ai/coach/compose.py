@@ -30,6 +30,7 @@ from typing import Any
 
 from family_fitness_ai.coach import llm as coach_llm
 from family_fitness_ai.common import copy as words
+from family_fitness_ai.common.copy import with_topic
 from family_fitness_ai.common.items import age_group_of
 from family_fitness_ai.rag.index import Chunk
 from family_fitness_ai.rag.search import search
@@ -302,10 +303,10 @@ def _brief(read: Read) -> dict[str, Any]:
         "성별": read.profile.sex,
         "연령대": read.profile.age_group,
         "대상_체력요인": read.factor or None,
+        # 키울 요인을 부르는 말. 코치는 이 말로 부르고, 측정의 「상태」는 수준을 말할
+        # 때만 쓴다(PLAN_SYSTEM).
         "대상_요인을_고른_까닭": (
-            "보호자가 키워 주고 싶은 역량"
-            if read.focused
-            else ("측정 결과로 고른 요인" if read.factor else None)
+            words.focus_reason(read.focused) if read.focused or read.factor else None
         ),
         "측정": measured,
     }
@@ -322,10 +323,12 @@ def _rule_copy(read: Read, constraints: Constraints, slot: Slot, weeks: int) -> 
         where = f"하루 {slot.minutes}분"
     else:
         where = f"주 {constraints.days_per_week}회 {slot.minutes}분"
-    if read.factor and read.band:
-        parent = f"{words.factor_copy(read.factor, read.band)}. {where}이면 충분합니다"
-    elif read.focused:
-        parent = f"키워 주고 싶다고 하신 {read.factor}에 맞춰 {where}으로 짰습니다"
+    # 키울 요인은 고른 까닭으로 부른다. 「유연성은 꾸준히 하고 있는 영역입니다」처럼
+    # 구간 문구로 부르면 왜 그걸 하라는지 읽히지 않는다.
+    if read.focused:
+        parent = f"{words.GUARDIAN_FOCUS}인 {read.factor}에 맞춰 {where}으로 짰습니다"
+    elif read.factor and read.band:
+        parent = f"{with_topic(read.factor)} {words.GROW_NOW}입니다. {where}이면 충분합니다"
     else:
         parent = f"{where}으로 짰습니다. 측정을 하면 요인을 짚어 드릴 수 있습니다"
     return {"child": child, "parent": parent}
@@ -709,9 +712,12 @@ def build(
             if driver.percentile is not None
             else f"{driver.factor} 측정값 없음"
         )
-        assess_summary = f"{scored} · 대상 요인 = {driver.factor}(보호자가 고름)"
+        assess_summary = f"{scored} · 대상 요인 = {driver.factor}({words.GUARDIAN_FOCUS})"
     elif driver.percentile is not None:
-        assess_summary = f"{driver.factor} 백분위 {driver.percentile} · 대상 요인 = {driver.factor}"
+        assess_summary = (
+            f"{driver.factor} 백분위 {driver.percentile} · "
+            f"대상 요인 = {driver.factor}({words.GROW_NOW})"
+        )
     else:
         assess_summary = (
             f"연령대 {driver.profile.age_group} · 만 {driver.profile.age}세 · 측정값 없음"

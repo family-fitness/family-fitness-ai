@@ -13,12 +13,24 @@ DISCLAIMER = (
 
 TRAJECTORY_NOTICE = "집단 분포를 바탕으로 한 참고 범위입니다. 개인의 변화를 나타내지 않습니다."
 
-#: band 코드 → 부모가 읽는 말.
+#: band 코드 → 보호자가 읽는 말. 그 요인의 **수준**을 말할 때만 쓴다.
 BAND_COPY = {
     "strength": "잘하고 있는 영역",
     "steady": "꾸준히 하고 있는 영역",
     "growth": "지금 키우기 좋은 영역",
 }
+
+#: 이번 편성이 키울 요인을 부르는 말. 고른 까닭으로 부른다 — 구간 문구(BAND_COPY)로
+#: 부르면 「꾸준히 하고 있는 영역」을 왜 하라는지 읽히지 않는다. 앞의 것은 FE 결과
+#: 화면과 같은 말이다.
+GROW_NOW = "지금 키우기 좋은 영역"
+GUARDIAN_FOCUS = "보호자가 키워 주고 싶은 역량"
+
+
+def focus_reason(focused: bool) -> str:
+    """키울 요인을 고른 까닭. 보호자가 골랐으면 그 말, 아니면 가장 낮은 요인이다."""
+    return GUARDIAN_FOCUS if focused else GROW_NOW
+
 
 #: verify 가 반환 직전에 거르는 말. 하나라도 있으면 통과하지 않는다.
 BANNED_WORDS = (

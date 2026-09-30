@@ -119,7 +119,7 @@ def main() -> None:
     for mission in proposal["missions"][:2]:
         print(f"\n   · {mission['title']} — {mission['duration_min']}분")
         print(f"     아이: {mission['copy']['child']}")
-        print(f"     부모: {mission['copy']['parent']}")
+        print(f"     보호자: {mission['copy']['parent']}")
         if mission.get("reason"):
             print(f"     근거: {mission['reason']}")
         for session in mission["sessions"]:
