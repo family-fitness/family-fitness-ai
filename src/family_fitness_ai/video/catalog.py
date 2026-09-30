@@ -59,6 +59,15 @@ def clip_counts(minutes: int) -> dict[str, int]:
     return dict(zip(PHASES, counts, strict=True))
 
 
+def focus_quota(slots: int) -> int:
+    """보호자가 키워 주고 싶은 역량으로 채울 본운동 칸 수. 4분의 3, 올림이다.
+
+    네 칸이면 세 칸이다(사용자 결정). 전에는 처방에 나온 동작이 요인보다 앞서
+    네 칸 가운데 두 칸만 그 역량이었다.
+    """
+    return -(-slots * 3 // 4)
+
+
 @dataclass(frozen=True)
 class Clip:
     video_id: str
@@ -345,6 +354,7 @@ def routine(
     level: int | None = None,
     seed: str = "",
     recent: frozenset[str] = frozenset(),
+    focus: str = "",
 ) -> dict[str, list[Clip]]:
     """한 회분 클립을 단계별로 고른다.
 
@@ -356,6 +366,12 @@ def routine(
 
     seed(편성 시작일)로 같은 순위끼리 섞고, recent(최근에 받은 영상 id)는 뒤로
     미룬다(_defer_recent). 둘 다 비우면 예전과 같은 차례다.
+
+    focus(보호자가 키워 주고 싶은 역량)가 있으면 본운동 칸의 4분의 3(focus_quota)을
+    먼저 그 역량 클립으로 채운다. 그 역량 후보가 모자라면 최근에 받은 영상 → 앞선
+    날에 쓴 동작 차례로 그 역량을 다시 쓰고, 그래도 모자라면 나머지 칸과 함께 지금
+    차례대로(다른 요인) 채운다. 한 회 안에서 같은 동작은 여전히 두 번 넣지 않는다.
+    준비 · 정리운동은 focus 로 바뀌지 않는다.
     """
     conditions = conditions or Conditions()
     prescribed = prescribed or set()
@@ -372,14 +388,42 @@ def routine(
         if candidates and all(clip.title in used for clip in candidates):
             # 뺄 것을 빼고 나니 남는 게 없다. 그 단계만 처음으로 되돌린다.
             used -= {clip.title for clip in candidates}
-        for clip in _defer_recent(sorted(candidates, key=rank), factor, recent, seed):
+        ranked = _defer_recent(sorted(candidates, key=rank), factor, recent, seed)
+        if focus and phase == "본운동":
+            _pick_focus(picked[phase], ranked, focus, focus_quota(want[phase]), used, recent)
+        for clip in ranked:
+            if len(picked[phase]) >= want[phase]:
+                break
             if clip.title in used:
                 continue
             picked[phase].append(clip)
             used.add(clip.title)
-            if len(picked[phase]) >= want[phase]:
-                break
     return picked
+
+
+def _pick_focus(
+    picked: list[Clip],
+    ranked: list[Clip],
+    focus: str,
+    quota: int,
+    used: set[str],
+    recent: frozenset[str],
+) -> None:
+    """본운동 앞 quota 칸을 focus 클립으로 채운다. picked · used 를 고친다.
+
+    차례: 새 동작의 새 영상 → 새 동작의 최근 영상 → 앞선 날에 쓴 동작. 순위(ranked)
+    안에서의 차례는 그대로 둔다. 오늘 이미 넣은 동작은 다시 넣지 않는다.
+    """
+    earlier = set(used)
+    mine = [clip for clip in ranked if clip.fitness_factor == focus]
+    order = sorted(mine, key=lambda clip: (clip.title in earlier, clip.video_id in recent))
+    for clip in order:
+        if len(picked) >= quota:
+            break
+        if clip.title in {c.title for c in picked}:
+            continue
+        picked.append(clip)
+        used.add(clip.title)
 
 
 def pool(

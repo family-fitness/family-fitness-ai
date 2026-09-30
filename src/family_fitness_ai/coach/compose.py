@@ -454,6 +454,15 @@ def _by_llm(
                 "종류": slot.kind,
                 "분": slot.minutes,
                 "단계별_편수": catalog.clip_counts(slot.minutes),
+                **(
+                    {
+                        "본운동_대상_요인_편수": catalog.focus_quota(
+                            catalog.clip_counts(slot.minutes)["본운동"]
+                        )
+                    }
+                    if read.focused
+                    else {}
+                ),
             }
             for slot in slots
         ],
@@ -486,6 +495,15 @@ def _by_llm(
             "최근 이 true 인 클립은 이 사람이 요즘 받은 영상이다 — 같은 단계·요인의 다른 "
             "클립이 모자랄 때만 고른다. 한 회 안에서는 영상 이 같은 클립을 둘 넘게 "
             "고르지 않는다 — 다른 영상이 모자랄 때만 같은 영상을 다시 쓴다."
+            + (
+                f" 대상 요인 {read.factor} 은 보호자가 키워 주고 싶은 역량이다 — 본운동의 "
+                "4분의 3 이상(자리의 본운동_대상_요인_편수만큼)을 요인 이 "
+                f"{read.factor} 인 클립으로 고른다. 그런 클립이 모자라면 최근 이 true "
+                "이거나 같은 영상인 것이라도 이 요인을 먼저 고르고, 그래도 모자라면 다른 "
+                "요인으로 채운다. 준비운동 · 정리운동은 이 비율과 상관없다."
+                if read.focused
+                else ""
+            )
         ),
     }
 
@@ -523,6 +541,7 @@ def _by_llm(
             tally,
             recent,
             start_date.isoformat(),
+            read.factor if read.focused else "",
         )
         week |= {clip.title for _, clip in chosen}
         # 코치가 골랐는데 이 회에서 빠진 동작. 글에 그 이름이 남아 있으면 못 쓴다.
@@ -561,6 +580,7 @@ def _fill(
     tally: Tally,
     recent: frozenset[str] = frozenset(),
     seed: str = "",
+    focus: str = "",
 ) -> list[tuple[str, catalog.Clip]]:
     """단계마다 정한 편수를 채운다.
 
@@ -577,6 +597,13 @@ def _fill(
     한 단계의 후보가 모두 헌 것이면 코치가 고른 것을 앞세우지 않고 seed(편성
     시작일)로 섞는다. 유아기 정리운동 후보 일곱이 모두 한 영상에서 나와 늘 최근이라,
     코치가 날마다 고르는 같은 클립이 14일 중 13일 나왔다.
+
+    focus(보호자가 키워 주고 싶은 역량)가 있으면 본운동은 먼저 4분의 3 칸
+    (catalog.focus_quota)을 그 역량 클립으로 채운다. 코치가 고른 그 역량 클립 →
+    목록의 그 역량 클립 차례고, 헌 것 · 한 회 안에서 이미 나온 영상이라도 그 역량이면
+    다른 요인보다 먼저 쓴다(사용자 결정: 그 역량 → 새 영상). 그 역량이 모자라면
+    남은 칸은 위의 차례대로 채운다. 코치가 그 역량이 아닌 본운동을 넷 골랐으면
+    뒤의 것부터 밀려난다. 준비 · 정리운동은 focus 로 바뀌지 않는다.
     """
     chosen: list[tuple[str, catalog.Clip]] = []
     today: set[str] = set()
@@ -604,24 +631,30 @@ def _fill(
         )
         if seed and order and all(worn(clip) for clip in order):
             order.sort(key=lambda clip: (clip.title in week, catalog.shuffle_key(clip, seed)))
+        rounds = [(order, want[phase])]
+        if focus and phase == "본운동":
+            mine = [clip for clip in order if clip.fitness_factor == focus]
+            # 그 역량 안에서는 코치가 고른 새 것 → 목록의 새 것 → 헌 것 차례를 지킨다.
+            rounds.insert(0, (mine, min(want[phase], catalog.focus_quota(want[phase]))))
         count = 0
-        for other_videos_only in (True, False):
-            for clip in order:
-                if count == want[phase]:
-                    break
-                if clip.title in today:
-                    continue
-                if other_videos_only and (
-                    clip.video_id in videos
-                    or (clip not in picked and clip.video_id in reserved_videos)
-                ):
-                    continue
-                today.add(clip.title)
-                videos.add(clip.video_id)
-                chosen.append((phase, clip))
-                count += 1
-                if clip not in picked:
-                    tally.filled += 1
+        for candidates, limit in rounds:
+            for other_videos_only in (True, False):
+                for clip in candidates:
+                    if count >= limit:
+                        break
+                    if clip.title in today:
+                        continue
+                    if other_videos_only and (
+                        clip.video_id in videos
+                        or (clip not in picked and clip.video_id in reserved_videos)
+                    ):
+                        continue
+                    today.add(clip.title)
+                    videos.add(clip.video_id)
+                    chosen.append((phase, clip))
+                    count += 1
+                    if clip not in picked:
+                        tally.filled += 1
     return chosen
 
 
@@ -696,6 +729,8 @@ def _by_rule(
             # 영상이 나오지 않게 한다.
             seed=start_date.isoformat(),
             recent=constraints.recent,
+            # 보호자가 키워 주고 싶은 역량이면 본운동 4분의 3 을 그 역량으로 채운다.
+            focus=read.factor if read.focused else "",
         )
         flat = [(phase, clip) for phase in catalog.PHASES for clip in picked[phase]]
         if not flat:
