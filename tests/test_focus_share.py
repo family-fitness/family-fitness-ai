@@ -214,7 +214,8 @@ def _coach_picks_other_factors(focus: str) -> Any:
         warm = next(c for c in clips if c["단계"] == "준비운동")
         cool = next(c for c in clips if c["단계"] == "정리운동")
         # 한 영상에서 하나씩만 — 한 회 안의 같은 영상 규칙으로 바뀌지 않게.
-        seen_videos: set[str] = set()
+        # 준비운동과 정리운동의 영상도 뺀다. 그 영상의 본운동은 다른 영상 뒤로 밀린다.
+        seen_videos: set[str] = {warm["영상"], cool["영상"]}
         others = []
         for c in clips:
             if c["단계"] == "본운동" and c["요인"] != focus and c["영상"] not in seen_videos:
