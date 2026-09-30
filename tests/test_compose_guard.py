@@ -183,6 +183,60 @@ def test_text_naming_a_move_we_took_out_is_replaced(monkeypatch: pytest.MonkeyPa
     assert missions[1]["reason"] == compose._rule_reason([1])  # 둘째 날은 없다
 
 
+def test_each_slot_tells_the_coach_its_date_and_weekday(monkeypatch: pytest.MonkeyPatch):
+    """자리에 day_offset 만 주면 코치가 요일을 짐작한다. 주간은 날을 정하지 않는다."""
+    seen: list[dict] = []
+
+    def plan(payload):
+        seen.append(payload)
+        return [_plan(0, _full(payload))]
+
+    weekly = compose.Slot("주간", compose.WEEKLY_SLOT, 30, [{"ref": "p", "role": "주행자"}])
+    _run(monkeypatch, plan, [_day(0), _day(2), weekly])
+    slots = seen[0]["자리"]
+    assert [(s["날짜"], s["요일"]) for s in slots] == [
+        ("2026-10-05", "월요일"),
+        ("2026-10-07", "수요일"),
+        (None, None),
+    ]
+
+
+def test_a_title_with_another_weekday_falls_back(monkeypatch: pytest.MonkeyPatch):
+    """수요일 편성 제목이 「유연성을 키우는 월요일」로 온 적이 있다. 그 칸만 규칙 제목으로."""
+
+    def plan(payload):
+        return [
+            _plan(0, _full(payload), title="월요일 몸 늘이기"),
+            _plan(2, _full(payload), title="유연성 키우는 월요일"),
+        ]
+
+    missions, tally = _run(monkeypatch, plan, [_day(0), _day(2)])
+    assert missions[0]["title"] == "월요일 몸 늘이기"  # 맞는 요일은 그대로
+    assert missions[1]["title"] == "수요일 유연성 기르기"
+    assert missions[1]["copy"]["child"] == "몸을 길게 늘여 볼까요"  # 다른 칸은 그대로
+    assert tally.rewritten == 1
+
+
+def test_weekday_words_in_the_weekly_mission_fall_back(monkeypatch: pytest.MonkeyPatch):
+    """주간은 그 주 안에 아무 때나 한다. 요일을 박은 글은 못 쓴다."""
+
+    def plan(payload):
+        return [
+            _plan(
+                compose.WEEKLY_SLOT,
+                _full(payload),
+                title="토요일 다 같이",
+                parent="토요일에 온 가족이 함께 해 보세요",
+            )
+        ]
+
+    weekly = compose.Slot("주간", compose.WEEKLY_SLOT, 15, [{"ref": "p", "role": "주행자"}])
+    missions, tally = _run(monkeypatch, plan, [weekly])
+    assert missions[0]["title"] == "이번 주 함께 유연성 기르기"
+    assert "토요일" not in missions[0]["copy"]["parent"]
+    assert tally.rewritten == 2
+
+
 # ── ④ 차례 ────────────────────────────────────────────────────────────────
 
 

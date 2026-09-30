@@ -329,6 +329,13 @@ def _rule_title(read: Read, slot: Slot, start_date: date) -> str:
     return f"{_WEEKDAYS[day.weekday()]} {read.factor or '전신'} 기르기"
 
 
+def _weekday(slot: Slot, start_date: date) -> str | None:
+    """일간 자리의 요일. 주간은 날을 정하지 않아 None 이다."""
+    if slot.weekly:
+        return None
+    return _WEEKDAYS[(start_date + timedelta(days=slot.offset)).weekday()]
+
+
 def _rule_reason(evidence_base: list[int]) -> str:
     if not evidence_base:
         return ""
@@ -425,6 +432,12 @@ def _by_llm(
         "자리": [
             {
                 "day_offset": slot.offset,
+                # 코치가 요일을 짐작하지 않게 준다. day_offset 만 주었을 때 수요일 편성
+                # 제목이 「유연성을 키우는 월요일」로 왔다. 주간은 날을 정하지 않아 비운다.
+                "날짜": (
+                    None if slot.weekly else (start_date + timedelta(days=slot.offset)).isoformat()
+                ),
+                "요일": _weekday(slot, start_date),
                 "종류": slot.kind,
                 "분": slot.minutes,
                 "단계별_편수": catalog.clip_counts(slot.minutes),
@@ -497,6 +510,7 @@ def _by_llm(
                 "reason": _rule_reason(evidence_base),
             },
             dropped,
+            _weekday(slot, start_date),
             tally,
         )
         missions.append(
@@ -559,13 +573,15 @@ def _checked_text(
     written: dict[str, Any],
     fallback: dict[str, str],
     dropped: set[str],
+    weekday: str | None,
     tally: Tally,
 ) -> dict[str, str]:
     """코치가 쓴 글을 칸마다 잰다. 어긋난 칸만 규칙 문구로 바꾼다.
 
-    길이(title 16 · child 45 · parent 70)와 금지 어휘, 그리고 이 회에서 빠진 동작의
-    이름을 본다. 프롬프트로 시키지만 지켜지지 않았다 — 주간 parent 가 92자로
-    나간 적이 있다. 반쯤 고쳐 쓰지 않는다. 그 칸을 통째로 바꾼다.
+    길이(title 16 · child 45 · parent 70)와 금지 어휘, 이 회에서 빠진 동작의
+    이름, 그리고 그 자리와 다른 요일(주간이면 어느 요일이든)을 본다. 프롬프트로
+    시키지만 지켜지지 않았다 — 주간 parent 가 92자로 나간 적이 있다. 반쯤 고쳐 쓰지
+    않는다. 그 칸을 통째로 바꾼다.
     """
     out: dict[str, str] = {}
     for key, rule in fallback.items():
@@ -577,6 +593,7 @@ def _checked_text(
             and (limit is None or len(value) <= limit)
             and not words.banned_words_in(value)
             and not any(name in value for name in dropped)
+            and not any(day in value for day in _WEEKDAYS if day != weekday)
         )
         if fits:
             out[key] = str(value)
