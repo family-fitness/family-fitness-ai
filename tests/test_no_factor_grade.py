@@ -11,7 +11,7 @@ import re
 from datetime import date
 
 import pytest
-from conftest import needs_index, needs_release
+from conftest import needs_embedder, needs_index, needs_release
 
 from family_fitness_ai.coach import answer as coach_answer
 from family_fitness_ai.coach import compose
@@ -152,6 +152,7 @@ def test_the_copy_writer_rejects_a_grade():
 
 @needs_release
 @needs_index
+@needs_embedder
 def test_rule_plan_text_names_no_grade():
     child = compose.RunProfile(ref="p", role="주행자", age=11, age_unit="세", sex="M")
     plan = compose.build([child], date(2026, 10, 5), 1, compose.Constraints())
