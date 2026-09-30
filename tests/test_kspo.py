@@ -16,7 +16,7 @@ from functools import lru_cache
 from pathlib import Path
 
 import pytest
-from conftest import needs_index, needs_release
+from conftest import needs_embedder, needs_index, needs_release
 
 from family_fitness_ai.coach import compose, verify
 from family_fitness_ai.common.settings import settings
@@ -409,6 +409,7 @@ def test_the_rule_plan_fills_a_senior_session():
 
 @needs_release
 @needs_index
+@needs_embedder
 @has_table
 def test_a_rule_plan_for_a_seventy_year_old_is_not_refused():
     grandma = compose.RunProfile(ref="g", role="주행자", age=70, age_unit="세", sex="F")
