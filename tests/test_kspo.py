@@ -136,6 +136,37 @@ def test_a_phase_is_borrowed_from_the_standard_program():
     assert {r["phase_on_video"] for r in rows} == {""}
 
 
+def test_a_phase_is_not_borrowed_from_a_prevention_program():
+    """질환 · 예방 프로그램은 클립으로 쓰지 않는다. 그 단계도 빌리지 않는다 — 「우울증
+    예방 운동프로그램(댄스운동 편)」 00044 만 팔굽혀펴기를 준비운동에 두어, 팔굽혀펴기
+    영상이 모두 준비운동 자리에 들어갔다. 표준운동은 본운동이라 적는다(받아 둔 원자료)."""
+    standard = {
+        "file_nm": "0AUDLJ08S_00035.mp4",
+        "vdo_ttl_nm": "성인기 3주차 운동프로그램",
+        "vdo_desc": "성인을 위한 주간 운동프로그램 중 3주차에 해당하는 표준운동프로그램",
+        "trng_nm": "팔 굽혀 펴기 (Push up)",
+        "trng_sqnc_nm": "본 운동",
+    }
+    prevention = {
+        "file_nm": "0AUDLJ08S_00044.mp4",
+        "vdo_ttl_nm": "우울증 예방 운동프로그램(댄스운동 편)",
+        "vdo_desc": "우울증을 예방하기 위한 댄스운동프로그램",
+        "trng_nm": "팔 굽혀 펴기",
+        "trng_se_nm": "준비 운동",
+    }
+    got = kspo.borrowed_from({kspo.STD: [standard], kspo.ROUTINE: [prevention]})
+    assert got[kspo.join_key("팔 굽혀 펴기")].phases == ("본운동",)
+
+
+@needs_release
+@has_table
+def test_push_ups_are_not_a_warm_up_in_the_table():
+    rows = list(csv.DictReader((settings().release_dir / kspo.OUT).open(encoding="utf-8")))
+    push_ups = [r for r in rows if kspo.join_key(r["name_on_video"]) == "팔굽혀펴기"]
+    assert push_ups
+    assert {r["phase"] for r in push_ups} == {"본운동"}
+
+
 @needs_index
 def test_a_flexibility_move_without_a_borrowed_phase_goes_to_both_ends():
     rows = _rows("가이드 · 유연성 → 준비·정리")

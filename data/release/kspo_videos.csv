@@ -54,13 +54,9 @@ video_id,seq,name_on_video,phase_on_video,start_sec,end_sec,duration_sec,exercis
 0AUDLJ08S_00247,1,네발기기 자세에서 다리 위로 뻗어올리기,,0,63,63,,근력,본운동,True,True,True,False,kspo,0.0,성인,3,5,,,,https://openapi.kspo.or.kr/web/video/0AUDLJ08S_00247.mp4,국민체력100 운동처방동영상 · 네발기기 자세에서 다리 위로 뻗어올리기
 0AUDLJ08S_00247,1,네발기기 자세에서 다리 위로 뻗어올리기,,0,63,63,,근력,본운동,True,True,True,False,kspo,0.0,청소년,3,5,,,,https://openapi.kspo.or.kr/web/video/0AUDLJ08S_00247.mp4,국민체력100 운동처방동영상 · 네발기기 자세에서 다리 위로 뻗어올리기
 0AUDLJ08S_00248,1,팔 굽혀 펴기,,0,64,64,팔굽혀펴기,근력,본운동,True,True,True,False,kspo,1.0,성인,1,5,,,,https://openapi.kspo.or.kr/web/video/0AUDLJ08S_00248.mp4,국민체력100 운동처방동영상 · 팔굽혀펴기
-0AUDLJ08S_00248,1,팔 굽혀 펴기,,0,64,64,팔굽혀펴기,근력,준비운동,True,True,True,False,kspo,1.0,성인,1,5,,,,https://openapi.kspo.or.kr/web/video/0AUDLJ08S_00248.mp4,국민체력100 운동처방동영상 · 팔굽혀펴기
 0AUDLJ08S_00248,1,팔 굽혀 펴기,,0,64,64,팔굽혀펴기,근지구력,본운동,True,True,True,False,kspo,1.0,성인,1,5,,,,https://openapi.kspo.or.kr/web/video/0AUDLJ08S_00248.mp4,국민체력100 운동처방동영상 · 팔굽혀펴기
-0AUDLJ08S_00248,1,팔 굽혀 펴기,,0,64,64,팔굽혀펴기,근지구력,준비운동,True,True,True,False,kspo,1.0,성인,1,5,,,,https://openapi.kspo.or.kr/web/video/0AUDLJ08S_00248.mp4,국민체력100 운동처방동영상 · 팔굽혀펴기
 0AUDLJ08S_00248,1,팔 굽혀 펴기,,0,64,64,팔굽혀펴기,근력,본운동,True,True,True,False,kspo,1.0,청소년,1,5,,,,https://openapi.kspo.or.kr/web/video/0AUDLJ08S_00248.mp4,국민체력100 운동처방동영상 · 팔굽혀펴기
-0AUDLJ08S_00248,1,팔 굽혀 펴기,,0,64,64,팔굽혀펴기,근력,준비운동,True,True,True,False,kspo,1.0,청소년,1,5,,,,https://openapi.kspo.or.kr/web/video/0AUDLJ08S_00248.mp4,국민체력100 운동처방동영상 · 팔굽혀펴기
 0AUDLJ08S_00248,1,팔 굽혀 펴기,,0,64,64,팔굽혀펴기,근지구력,본운동,True,True,True,False,kspo,1.0,청소년,1,5,,,,https://openapi.kspo.or.kr/web/video/0AUDLJ08S_00248.mp4,국민체력100 운동처방동영상 · 팔굽혀펴기
-0AUDLJ08S_00248,1,팔 굽혀 펴기,,0,64,64,팔굽혀펴기,근지구력,준비운동,True,True,True,False,kspo,1.0,청소년,1,5,,,,https://openapi.kspo.or.kr/web/video/0AUDLJ08S_00248.mp4,국민체력100 운동처방동영상 · 팔굽혀펴기
 0AUDLJ08S_00249,1,누워서 팔 다리 교차 뻗기,,0,93,93,,,본운동,True,True,True,False,kspo,0.0,성인,1,5,,10~15,,https://openapi.kspo.or.kr/web/video/0AUDLJ08S_00249.mp4,국민체력100 운동처방동영상 · 누워서 팔 다리 교차 뻗기
 0AUDLJ08S_00249,1,누워서 팔 다리 교차 뻗기,,0,93,93,,,본운동,True,True,True,False,kspo,0.0,청소년,1,5,,10~15,,https://openapi.kspo.or.kr/web/video/0AUDLJ08S_00249.mp4,국민체력100 운동처방동영상 · 누워서 팔 다리 교차 뻗기
 0AUDLJ08S_00250,1,뒤로 팔 굽혀 펴기,,0,60,60,뒤로 팔굽혀펴기,근력,본운동,True,True,True,False,kspo,1.0,성인,3,3,,,,https://openapi.kspo.or.kr/web/video/0AUDLJ08S_00250.mp4,국민체력100 운동처방동영상 · 뒤로 팔굽혀펴기
@@ -228,9 +224,7 @@ video_id,seq,name_on_video,phase_on_video,start_sec,end_sec,duration_sec,exercis
 0AUDLJ08S_00350,1,어깨 안쪽 돌림,,0,52,52,,,본운동,True,True,True,True,kspo,0.0,성인,1,5,,,,https://openapi.kspo.or.kr/web/video/0AUDLJ08S_00350.mp4,국민체력100 운동처방동영상 · 어깨 안쪽 돌림
 0AUDLJ08S_00350,1,어깨 안쪽 돌림,,0,52,52,,,본운동,True,True,True,True,kspo,0.0,청소년,1,5,,,,https://openapi.kspo.or.kr/web/video/0AUDLJ08S_00350.mp4,국민체력100 운동처방동영상 · 어깨 안쪽 돌림
 0AUDLJ08S_00351,1,팔 굽혀 펴기(매트),,0,91,91,팔굽혀펴기,근력,본운동,True,True,True,False,kspo,1.0,유소년,2,4,,,,https://openapi.kspo.or.kr/web/video/0AUDLJ08S_00351.mp4,국민체력100 운동처방가이드 · 팔굽혀펴기
-0AUDLJ08S_00351,1,팔 굽혀 펴기(매트),,0,91,91,팔굽혀펴기,근력,준비운동,True,True,True,False,kspo,1.0,유소년,2,4,,,,https://openapi.kspo.or.kr/web/video/0AUDLJ08S_00351.mp4,국민체력100 운동처방가이드 · 팔굽혀펴기
 0AUDLJ08S_00351,1,팔 굽혀 펴기(매트),,0,91,91,팔굽혀펴기,근지구력,본운동,True,True,True,False,kspo,1.0,유소년,2,4,,,,https://openapi.kspo.or.kr/web/video/0AUDLJ08S_00351.mp4,국민체력100 운동처방가이드 · 팔굽혀펴기
-0AUDLJ08S_00351,1,팔 굽혀 펴기(매트),,0,91,91,팔굽혀펴기,근지구력,준비운동,True,True,True,False,kspo,1.0,유소년,2,4,,,,https://openapi.kspo.or.kr/web/video/0AUDLJ08S_00351.mp4,국민체력100 운동처방가이드 · 팔굽혀펴기
 0AUDLJ08S_00352,1,누워서 뒤로 팔 굽혀 펴기,,0,91,91,누워서 뒤로 팔굽혀펴기,근력,본운동,True,True,True,False,kspo,1.0,유소년,2,4,1~3,10~15,,https://openapi.kspo.or.kr/web/video/0AUDLJ08S_00352.mp4,국민체력100 운동처방가이드 · 누워서 뒤로 팔굽혀펴기
 0AUDLJ08S_00352,1,누워서 뒤로 팔 굽혀 펴기,,0,91,91,누워서 뒤로 팔굽혀펴기,근지구력,본운동,True,True,True,False,kspo,1.0,유소년,2,4,1~3,10~15,,https://openapi.kspo.or.kr/web/video/0AUDLJ08S_00352.mp4,국민체력100 운동처방가이드 · 누워서 뒤로 팔굽혀펴기
 0AUDLJ08S_00353,1,앉아서 엉덩이 들고 이동하기,,0,99,99,앉아서 엉덩이 들고 이동하기,근력,본운동,True,False,True,True,kspo,1.0,유소년,2,4,,,,https://openapi.kspo.or.kr/web/video/0AUDLJ08S_00353.mp4,국민체력100 운동처방가이드 · 앉아서 엉덩이 들고 이동하기
@@ -506,9 +500,7 @@ video_id,seq,name_on_video,phase_on_video,start_sec,end_sec,duration_sec,exercis
 0AUDLJ08S_00554,1,네발기기 자세에서 다리 위로 뻗어올리기,,0,69,69,,근력,본운동,True,True,True,True,kspo,0.0,성인,3,5,,,,https://openapi.kspo.or.kr/web/video/0AUDLJ08S_00554.mp4,국민체력100 운동처방가이드 · 네발기기 자세에서 다리 위로 뻗어올리기
 0AUDLJ08S_00554,1,네발기기 자세에서 다리 위로 뻗어올리기,,0,69,69,,근력,본운동,True,True,True,True,kspo,0.0,청소년,3,5,,,,https://openapi.kspo.or.kr/web/video/0AUDLJ08S_00554.mp4,국민체력100 운동처방가이드 · 네발기기 자세에서 다리 위로 뻗어올리기
 0AUDLJ08S_00555,1,팔 굽혀 펴기,,0,75,75,팔굽혀펴기,근력,본운동,True,True,True,True,kspo,1.0,성인,1,5,,,,https://openapi.kspo.or.kr/web/video/0AUDLJ08S_00555.mp4,국민체력100 운동처방가이드 · 팔굽혀펴기-1
-0AUDLJ08S_00555,1,팔 굽혀 펴기,,0,75,75,팔굽혀펴기,근력,준비운동,True,True,True,True,kspo,1.0,성인,1,5,,,,https://openapi.kspo.or.kr/web/video/0AUDLJ08S_00555.mp4,국민체력100 운동처방가이드 · 팔굽혀펴기-1
 0AUDLJ08S_00555,1,팔 굽혀 펴기,,0,75,75,팔굽혀펴기,근력,본운동,True,True,True,True,kspo,1.0,청소년,1,5,,,,https://openapi.kspo.or.kr/web/video/0AUDLJ08S_00555.mp4,국민체력100 운동처방가이드 · 팔굽혀펴기-1
-0AUDLJ08S_00555,1,팔 굽혀 펴기,,0,75,75,팔굽혀펴기,근력,준비운동,True,True,True,True,kspo,1.0,청소년,1,5,,,,https://openapi.kspo.or.kr/web/video/0AUDLJ08S_00555.mp4,국민체력100 운동처방가이드 · 팔굽혀펴기-1
 0AUDLJ08S_00557,1,허리 굽혀 팔 뒤로 들기,,0,77,77,허리 굽혀 팔 뒤로 들기,근력,본운동,True,True,True,False,kspo,1.0,성인,1,5,,,,https://openapi.kspo.or.kr/web/video/0AUDLJ08S_00557.mp4,국민체력100 운동처방가이드 · 허리 굽혀 팔 뒤로 들기
 0AUDLJ08S_00557,1,허리 굽혀 팔 뒤로 들기,,0,77,77,허리 굽혀 팔 뒤로 들기,근력,본운동,True,True,True,False,kspo,1.0,청소년,1,5,,,,https://openapi.kspo.or.kr/web/video/0AUDLJ08S_00557.mp4,국민체력100 운동처방가이드 · 허리 굽혀 팔 뒤로 들기
 0AUDLJ08S_00558,1,물병 옆으로 들어올리기,,0,62,62,물병 옆으로 들어올리기,근력,본운동,True,True,True,False,kspo,1.0,성인,1,5,,,,https://openapi.kspo.or.kr/web/video/0AUDLJ08S_00558.mp4,국민체력100 운동처방가이드 · 물병 옆으로 들어올리기
@@ -614,9 +606,7 @@ video_id,seq,name_on_video,phase_on_video,start_sec,end_sec,duration_sec,exercis
 0AUDLJ08S_00601,1,빠르게 걷기(3단계),,0,48,48,빠르게 걷기,심폐지구력,본운동,True,True,True,False,kspo,1.0,성인,3,3,,,,https://openapi.kspo.or.kr/web/video/0AUDLJ08S_00601.mp4,국민체력100 운동처방가이드 · 빠르게 걷기(3단계)
 0AUDLJ08S_00601,1,빠르게 걷기(3단계),,0,48,48,빠르게 걷기,심폐지구력,본운동,True,True,True,False,kspo,1.0,청소년,3,3,,,,https://openapi.kspo.or.kr/web/video/0AUDLJ08S_00601.mp4,국민체력100 운동처방가이드 · 빠르게 걷기(3단계)
 0AUDLJ08S_00602,1,팔 굽혀 펴기,,0,50,50,팔굽혀펴기,근력,본운동,True,True,True,False,kspo,1.0,성인,1,1,,,,https://openapi.kspo.or.kr/web/video/0AUDLJ08S_00602.mp4,국민체력100 운동처방가이드 · 팔굽혀펴기-2
-0AUDLJ08S_00602,1,팔 굽혀 펴기,,0,50,50,팔굽혀펴기,근력,준비운동,True,True,True,False,kspo,1.0,성인,1,1,,,,https://openapi.kspo.or.kr/web/video/0AUDLJ08S_00602.mp4,국민체력100 운동처방가이드 · 팔굽혀펴기-2
 0AUDLJ08S_00602,1,팔 굽혀 펴기,,0,50,50,팔굽혀펴기,근력,본운동,True,True,True,False,kspo,1.0,청소년,1,1,,,,https://openapi.kspo.or.kr/web/video/0AUDLJ08S_00602.mp4,국민체력100 운동처방가이드 · 팔굽혀펴기-2
-0AUDLJ08S_00602,1,팔 굽혀 펴기,,0,50,50,팔굽혀펴기,근력,준비운동,True,True,True,False,kspo,1.0,청소년,1,1,,,,https://openapi.kspo.or.kr/web/video/0AUDLJ08S_00602.mp4,국민체력100 운동처방가이드 · 팔굽혀펴기-2
 0AUDLJ08S_00647,1,몸통 들어올리기,,0,101,101,몸통 들어올리기,근력,본운동,True,True,True,False,kspo,1.0,성인,3,5,,,,https://openapi.kspo.or.kr/web/video/0AUDLJ08S_00647.mp4,국민체력100 운동처방가이드 · 몸통 들어올리기-1
 0AUDLJ08S_00647,1,몸통 들어올리기,,0,101,101,몸통 들어올리기,근력,본운동,True,True,True,False,kspo,1.0,청소년,3,5,,,,https://openapi.kspo.or.kr/web/video/0AUDLJ08S_00647.mp4,국민체력100 운동처방가이드 · 몸통 들어올리기-1
 0AUDLJ08S_00723,1,몸통 비틀기,,0,134,134,몸통 비틀기,유연성,정리운동,True,True,True,False,kspo,1.0,성인,1,5,,,,https://openapi.kspo.or.kr/web/video/0AUDLJ08S_00723.mp4,국민체력100 운동처방가이드 · 몸통 비틀기-2
@@ -720,9 +710,7 @@ video_id,seq,name_on_video,phase_on_video,start_sec,end_sec,duration_sec,exercis
 0AUDLJ08S_00871,1,양손 모아 균형잡기,,0,106,106,,협응력,본운동,True,True,True,True,kspo,0.0,청소년,4,5,,,,https://openapi.kspo.or.kr/web/video/0AUDLJ08S_00871.mp4,국민체력100 운동처방가이드 · 양손 모아 균형잡기
 0AUDLJ08S_00872,1,백 슬라이드,,0,109,109,,협응력,본운동,True,True,True,True,kspo,0.0,청소년,4,5,,,,https://openapi.kspo.or.kr/web/video/0AUDLJ08S_00872.mp4,국민체력100 운동처방가이드 · 백 슬라이드
 0AUDLJ08S_00873,1,팔 굽혀 펴기,,0,113,113,팔굽혀펴기,근력,본운동,True,True,True,False,kspo,1.0,청소년,3,3,,,,https://openapi.kspo.or.kr/web/video/0AUDLJ08S_00873.mp4,국민체력100 운동처방가이드 · 팔굽혀펴기-3
-0AUDLJ08S_00873,1,팔 굽혀 펴기,,0,113,113,팔굽혀펴기,근력,준비운동,True,True,True,False,kspo,1.0,청소년,3,3,,,,https://openapi.kspo.or.kr/web/video/0AUDLJ08S_00873.mp4,국민체력100 운동처방가이드 · 팔굽혀펴기-3
 0AUDLJ08S_00873,1,팔 굽혀 펴기,,0,113,113,팔굽혀펴기,근지구력,본운동,True,True,True,False,kspo,1.0,청소년,3,3,,,,https://openapi.kspo.or.kr/web/video/0AUDLJ08S_00873.mp4,국민체력100 운동처방가이드 · 팔굽혀펴기-3
-0AUDLJ08S_00873,1,팔 굽혀 펴기,,0,113,113,팔굽혀펴기,근지구력,준비운동,True,True,True,False,kspo,1.0,청소년,3,3,,,,https://openapi.kspo.or.kr/web/video/0AUDLJ08S_00873.mp4,국민체력100 운동처방가이드 · 팔굽혀펴기-3
 0AUDLJ08S_00874,1,뒤로 팔 굽혀 펴기,,0,117,117,뒤로 팔굽혀펴기,근력,본운동,True,True,True,True,kspo,1.0,청소년,3,3,,,,https://openapi.kspo.or.kr/web/video/0AUDLJ08S_00874.mp4,국민체력100 운동처방가이드 · 뒤로 팔굽혀펴기-1
 0AUDLJ08S_00874,1,뒤로 팔 굽혀 펴기,,0,117,117,뒤로 팔굽혀펴기,근지구력,본운동,True,True,True,True,kspo,1.0,청소년,3,3,,,,https://openapi.kspo.or.kr/web/video/0AUDLJ08S_00874.mp4,국민체력100 운동처방가이드 · 뒤로 팔굽혀펴기-1
 0AUDLJ08S_00875,1,바로서서 상체 숙이기,,0,93,93,,근력,본운동,True,True,True,False,kspo,0.0,청소년,3,3,,,,https://openapi.kspo.or.kr/web/video/0AUDLJ08S_00875.mp4,국민체력100 운동처방가이드 · 바로서서 상체 숙이기
@@ -843,7 +831,6 @@ video_id,seq,name_on_video,phase_on_video,start_sec,end_sec,duration_sec,exercis
 0AUDLJ08S_00943,1,나무 자세,,0,102,102,,유연성,준비운동,True,True,True,False,kspo,0.0,청소년,4,5,1~1,2~4,10~30 초,https://openapi.kspo.or.kr/web/video/0AUDLJ08S_00943.mp4,국민체력100 운동처방가이드 · 나무자세
 0AUDLJ08S_00944,1,몸통 비틀기,,0,93,93,몸통 비틀기,유연성,정리운동,True,True,True,False,kspo,1.0,청소년,4,5,,,,https://openapi.kspo.or.kr/web/video/0AUDLJ08S_00944.mp4,국민체력100 운동처방가이드 · 몸통 비틀기-3
 0AUDLJ08S_00944,1,몸통 비틀기,,0,93,93,몸통 비틀기,유연성,준비운동,True,True,True,False,kspo,1.0,청소년,4,5,,,,https://openapi.kspo.or.kr/web/video/0AUDLJ08S_00944.mp4,국민체력100 운동처방가이드 · 몸통 비틀기-3
-0AUDLJ08S_00959,1,목 돌리기,,0,77,77,,유연성,본운동,True,True,True,False,kspo,0.0,청소년,1,2,,,,https://openapi.kspo.or.kr/web/video/0AUDLJ08S_00959.mp4,국민체력100 운동처방가이드 · 목 돌리기
 0AUDLJ08S_00959,1,목 돌리기,,0,77,77,,유연성,준비운동,True,True,True,False,kspo,0.0,청소년,1,2,,,,https://openapi.kspo.or.kr/web/video/0AUDLJ08S_00959.mp4,국민체력100 운동처방가이드 · 목 돌리기
 0AUDLJ08S_00960,1,팔꿈치 원 그리기,,0,96,96,,유연성,정리운동,True,True,True,False,kspo,0.0,청소년,1,2,,,,https://openapi.kspo.or.kr/web/video/0AUDLJ08S_00960.mp4,국민체력100 운동처방가이드 · 팔꿈치 원 그리기
 0AUDLJ08S_00960,1,팔꿈치 원 그리기,,0,96,96,,유연성,준비운동,True,True,True,False,kspo,0.0,청소년,1,2,,,,https://openapi.kspo.or.kr/web/video/0AUDLJ08S_00960.mp4,국민체력100 운동처방가이드 · 팔꿈치 원 그리기

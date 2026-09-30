@@ -23,8 +23,9 @@ API 는 영상을 여섯 갈래로 나눠 주고, 한 영상은 한 갈래에만
                             그 갈래가 먼저다(KINDS) — 「운동프로그램」 묶음은 요인 칸이
                             모두 「유연성」으로 잘못 온다.
     단계                    짧은 영상 조회에는 단계 칸이 없다. 같은 운동명이 표준운동·루틴에서
-                            받은 단계(「준비 운동」…)를 쓰고, 없으면 체력요인이 유연성이면
-                            준비·정리, 아니면 본운동. 요인도 없으면 이름으로 본다.
+                            받은 단계(「준비 운동」…)를 쓴다. 질환·예방 프로그램 것은 빼고
+                            본다. 없으면 체력요인이 유연성이면 준비·정리, 아니면 본운동.
+                            요인도 없으면 이름으로 본다.
     도구·장소·인원·세트     영상의 장면 줄에 적힌 값 중 가장 많은 것.
     조용한지               API 에 없다. 유튜브 클립과 같은 규칙(이름)으로 본다.
 
@@ -165,6 +166,11 @@ def kind_factors(description: str) -> tuple[str, ...]:
     return KINDS.get(kind[1], ()) if kind else ()
 
 
+def for_conditions(about: str) -> bool:
+    """제목·설명이 질환·부상용인가. 진료 쪽이라 클립으로 쓰지 않고 단계도 빌리지 않는다."""
+    return is_medical(about) or any(word in about for word in CONDITIONS)
+
+
 def rule_phases(name: str, factors: tuple[str, ...]) -> tuple[str, ...]:
     """API 가 단계를 모를 때. 유연성 동작은 준비·정리 둘 다, 나머지는 본운동.
     요인도 없으면 이름으로 본다(유튜브 클립과 같은 규칙)."""
@@ -230,7 +236,18 @@ def borrowed_from(rows_by_op: dict[str, list[dict[str, Any]]]) -> dict[str, Borr
     한 영상은 한 조회에만 들어서 영상으로는 이을 수 없다. 운동명으로 잇는다.
     요인은 가이드가 먼저고 없으면 루틴, 수준은 가이드, 단계는 표준운동·루틴이다.
     가이드 설명에 갈래(KINDS)가 적혀 있으면 요인은 원문 대신 그 갈래의 요인이다.
+    질환·예방 프로그램의 단계는 빌리지 않는다 — 클립으로 쓰지 않는 영상이고, 「우울증
+    예방 운동프로그램(댄스운동 편)」 하나만 팔굽혀펴기를 준비운동에 둔다.
     """
+    videos: dict[str, list[dict[str, Any]]] = collections.defaultdict(list)
+    for rows in rows_by_op.values():
+        for row in rows:
+            videos[row.get("file_nm") or ""].append(row)
+    sick = {
+        file_nm
+        for file_nm, scenes in videos.items()
+        if for_conditions(" ".join((_most(scenes, "vdo_ttl_nm"), _most(scenes, "vdo_desc"))))
+    }
     guide_factor: dict[str, collections.Counter[str]] = collections.defaultdict(collections.Counter)
     routine_factor: dict[str, collections.Counter[str]] = collections.defaultdict(
         collections.Counter
@@ -253,7 +270,7 @@ def borrowed_from(rows_by_op: dict[str, list[dict[str, Any]]]) -> dict[str, Borr
                 routine_factor[key][factor] += 1
             if op == GUIDE and (row.get("ftns_lvl_nm") or "").strip():
                 level[key][row["ftns_lvl_nm"].strip()] += 1
-            if phase := _row_phase(row):
+            if (phase := _row_phase(row)) and row.get("file_nm") not in sick:
                 phases[key].add(phase)
 
     def top(counts: collections.Counter[str] | None) -> str:
@@ -315,8 +332,7 @@ def _video(
         or not ages
         or not 0 < seconds < MAX_SEC
         or re.search("루[틴팀]", f"{title} {name}")  # 루틴 프로그램 — 여러 동작을 묶었다
-        or is_medical(about)
-        or any(word in about for word in CONDITIONS)
+        or for_conditions(about)
         or "짝" in about  # 둘이 해야 한다. 처방동영상에는 인원 칸이 없다
         or _most(scenes, "nope_nm") not in ("", "1인 이상")
         or place in AWAY
