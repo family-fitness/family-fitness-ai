@@ -12,6 +12,7 @@ from __future__ import annotations
 
 from family_fitness_ai.coach import llm as copywriter
 from family_fitness_ai.coach import verify
+from family_fitness_ai.rag.index import Chunk
 from family_fitness_ai.rag.medical import is_medical
 from family_fitness_ai.rag.search import search
 from family_fitness_ai.video.vocabulary import exercises_in
@@ -23,16 +24,35 @@ def _refuse(reason: str) -> dict[str, object]:
     return {"answer": "", "citations": [], "refused": True, "refusal_reason": reason}
 
 
-def _extract(chunk_text: str, source: str, label: str, index: int) -> str:
+def _extract(chunk_text: str, source: str, index: int) -> str:
     """자료에서 그대로 뽑아 쓴 한 문장. 새로 지어내는 말이 없다."""
     if source == "prescription":
         names = [name for name, _ in exercises_in(chunk_text)][:3]
         if names:
-            return f"{label}에서 자주 제시되는 본운동은 {', '.join(names)} 입니다 [{index}]."
+            # 누가 받은 처방인지를 자료 문장 그대로 앞에 둔다. 「유연성 1등급」만 떼어
+            # 쓰면 유연성을 기르는 운동 목록처럼 읽힌다.
+            who = chunk_text.split(":", 1)[0].strip()
+            return f"{who}에는 {', '.join(names)} 등이 있습니다 [{index}]."
     if source == "criteria":
         return f"{chunk_text} [{index}]."
     head = chunk_text.split(" · 나오는 운동:")[0]
     return f"{head} [{index}]."
+
+
+def _passage(chunk: Chunk) -> str:
+    """LLM 에 넘기는 근거 한 문단.
+
+    처방 청크는 「그 등급인 사람들이 받은 본운동 처방 전체」다. 그대로 넘기면 LLM 이
+    「유연성을 기르기 위해 처방된 운동」처럼 자료에 없는 효과를 붙였다. 무엇을 적은
+    목록인지 문단 끝에 밝혀 둔다.
+    """
+    if chunk.source != "prescription":
+        return chunk.text
+    note = "이 목록은 이 사람들이 받은 본운동 처방 전체다."
+    factor = "·".join(chunk.factors)
+    if factor:
+        note += f" {factor}만을 위한 운동 목록이 아니다."
+    return f"{chunk.text} ({note})"
 
 
 def answer(question: str, age_group: str = "", profile_ref: str = "") -> dict[str, object]:
@@ -51,12 +71,12 @@ def answer(question: str, age_group: str = "", profile_ref: str = "") -> dict[st
         return _refuse("no_relevant_source")
 
     citations = [hit.chunk.citation(i + 1) for i, hit in enumerate(result.hits)]
-    passages = [(i + 1, hit.chunk.text) for i, hit in enumerate(result.hits)]
+    passages = [(i + 1, _passage(hit.chunk)) for i, hit in enumerate(result.hits)]
 
     written = copywriter.write_answer(question, passages)
     if written is None:
         written = " ".join(
-            _extract(hit.chunk.text, hit.chunk.source, hit.chunk.citation_label, i + 1)
+            _extract(hit.chunk.text, hit.chunk.source, i + 1)
             for i, hit in enumerate(result.hits[:2])
         )
 
