@@ -27,7 +27,7 @@ def search(
     *,
     k: int = 5,
     sources: tuple[str, ...] = (),
-    age_group: str | None = None,
+    age_group: str | tuple[str, ...] | None = None,
     factors: tuple[str, ...] = (),
     threshold: float | None = None,
 ) -> Result:
@@ -41,6 +41,9 @@ def search(
     store = corpus()
     scored = store.search(vector, len(store.chunks))
 
+    # 연령대를 여럿 받으면 그중 하나면 된다(어르신은 성인 영상도 — catalog.ages_for).
+    given = (age_group,) if isinstance(age_group, str) else (age_group or ())
+    ages = tuple(age for age in given if age)
     dropped = {"age_group": 0, "below_threshold": 0, "source": 0, "factor": 0}
     hits: list[Hit] = []
     for chunk, score in scored:
@@ -49,7 +52,7 @@ def search(
             continue
         # 연령 라벨이 없는 청크는 아이 앞에 내지 않는다. 라벨이 없다는 것은
         # 그 영상이 누구 것인지 모른다는 뜻이다.
-        if age_group and chunk.age_group != age_group:
+        if ages and chunk.age_group not in ages:
             dropped["age_group"] += 1
             continue
         if factors and not (set(factors) & set(chunk.factors)):

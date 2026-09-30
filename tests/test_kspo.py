@@ -315,3 +315,60 @@ def test_every_video_hit_says_where_to_play_it(monkeypatch: pytest.MonkeyPatch):
     assert out["hits"][0]["source"] == "kspo"
     scores = [h["score"] for h in out["hits"]]
     assert scores == sorted(scores, reverse=True)
+
+
+# ── 어르신: 성인 영상을 또래로 ──────────────────────────────────────────────
+# 팀 결정 — 어르신 전용 영상을 따로 만들지 않고 성인 영상(공단 「공통」 포함)을 똑같이
+# 쓴다. 공단 어르신 영상은 싣지 않으므로, 성인을 또래로 치지 않으면 65세 이상은
+# 유아기·유소년 영상까지 섞인 후보를 받고, 규칙 편성은 한 편도 못 고른다.
+
+
+def test_seniors_share_the_adult_age_group():
+    assert catalog.ages_for("어르신") == ("어르신", "성인")
+    assert catalog.ages_for("유소년") == ("유소년",)
+
+
+@needs_release
+@needs_index
+@has_table
+def test_seniors_get_adult_clips_first_and_no_notice():
+    for factor in ("근력", "유연성", ""):
+        pool, notice = catalog.pool("어르신", factor=factor)
+        assert pool
+        assert notice == ""
+        assert {c.age_group for c in pool} <= {"어르신", "성인"}
+        assert {c.source for c in pool} == {"youtube", "kspo"}
+
+
+@needs_release
+@needs_index
+@has_table
+def test_the_rule_plan_fills_a_senior_session():
+    picked = catalog.routine("어르신", 15, factor="근력")
+    assert {phase: len(clips) for phase, clips in picked.items()} == catalog.clip_counts(15)
+    assert all(c.age_group == "성인" for clips in picked.values() for c in clips)
+
+
+@needs_release
+@needs_index
+@has_table
+def test_a_rule_plan_for_a_seventy_year_old_is_not_refused():
+    grandma = compose.RunProfile(ref="g", role="주행자", age=70, age_unit="세", sex="F")
+    plan = compose.build([grandma], date(2026, 10, 5), 1, compose.Constraints())
+    assert not plan.refused, plan.steps
+    assert plan.proposal is not None
+    assert "notices" not in plan.proposal or not any(
+        "다른 연령대" in n for n in plan.proposal["notices"]
+    )
+
+
+@needs_release
+@needs_index
+@has_table
+def test_video_search_gives_seniors_the_adult_kspo_clips():
+    from family_fitness_ai.video.videos import kspo_hits
+
+    senior = kspo_hits("어르신", ("유연성",), ())
+    adult = kspo_hits("성인", ("유연성",), ())
+    assert senior
+    assert {h["video_id"] for h in senior} == {h["video_id"] for h in adult}

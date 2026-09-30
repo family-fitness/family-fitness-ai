@@ -13,6 +13,7 @@
 from __future__ import annotations
 
 import csv
+from collections.abc import Callable
 from dataclasses import dataclass
 from functools import lru_cache
 
@@ -36,6 +37,17 @@ SESSION_CLIPS: tuple[tuple[int, tuple[int, int, int]], ...] = (
 
 #: 한 세트로 삼기 좋은 길이. 같은 순위면 이 근처를 먼저 고른다.
 SET_SECONDS = 60
+
+#: 그 연령대가 또래 영상으로 치는 연령대. 첫째가 제 연령대다. 어르신 전용 영상을
+#: 따로 만들지 않고 성인 영상(공단 「공통」 포함)을 똑같이 쓴다(팀 결정). 공단 어르신
+#: 영상은 싣지 않아서(video.kspo), 성인을 또래로 치지 않으면 65세 이상은 유아기·
+#: 유소년 영상까지 섞인 후보를 받고 규칙 편성은 한 편도 못 고른다.
+SHARED_AGES: dict[str, tuple[str, ...]] = {"어르신": ("어르신", "성인")}
+
+
+def ages_for(age_group: str) -> tuple[str, ...]:
+    """그 연령대에게 또래로 치는 영상 연령대."""
+    return SHARED_AGES.get(age_group, (age_group,))
 
 
 def clip_counts(minutes: int) -> dict[str, int]:
@@ -233,6 +245,19 @@ def _rank(
     return score, abs(clip.duration_sec - SET_SECONDS)
 
 
+def _age_rank(
+    age_group: str, factor: str, prescribed: set[str], level: int | None
+) -> Callable[[Clip], tuple[int, int, int]]:
+    """_rank 에 「제 연령대 먼저」를 끼운다. 같은 순위면 제 연령대 라벨이 붙은 영상이
+    함께 쓰는 연령대(어르신에게 성인) 영상보다 앞선다."""
+
+    def rank(clip: Clip) -> tuple[int, int, int]:
+        score, distance = _rank(clip, factor, prescribed, level)
+        return score, int(clip.age_group != age_group), distance
+
+    return rank
+
+
 def prescribed_names(chunks: list[Chunk]) -> set[str]:
     names: set[str] = set()
     for chunk in chunks:
@@ -260,7 +285,9 @@ def routine(
     """
     conditions = conditions or Conditions()
     prescribed = prescribed or set()
-    pool = [clip for clip in clips() if clip.age_group == age_group and _fits(clip, conditions)]
+    ages = ages_for(age_group)
+    pool = [clip for clip in clips() if clip.age_group in ages and _fits(clip, conditions)]
+    rank = _age_rank(age_group, factor, prescribed, level)
 
     want = clip_counts(minutes)
     picked: dict[str, list[Clip]] = {phase: [] for phase in PHASES}
@@ -271,7 +298,7 @@ def routine(
         if candidates and all(clip.title in used for clip in candidates):
             # 뺄 것을 빼고 나니 남는 게 없다. 그 단계만 처음으로 되돌린다.
             used -= {clip.title for clip in candidates}
-        for clip in sorted(candidates, key=lambda c: _rank(c, factor, prescribed, level)):
+        for clip in sorted(candidates, key=rank):
             if clip.title in used:
                 continue
             picked[phase].append(clip)
@@ -292,7 +319,8 @@ def pool(
 ) -> tuple[list[Clip], str]:
     """고를 만한 클립과, 또래 밖까지 갔는지 알리는 말.
 
-    또래 라벨이 맞는 클립을 앞세우되, 거기서 끊지 않는다. 영상에 연령 라벨이
+    또래 라벨이 맞는 클립을 앞세우되, 거기서 끊지 않는다. 어르신은 성인 영상도
+    또래로 친다(ages_for) — 섞였다고 알리지 않는다. 영상에 연령 라벨이
     붙은 편이 많지 않아 또래만 고집하면 여덟 살에게 아무것도 못 준다. 라벨이
     다른 클립도 뒤에 세워 두고, 그런 것이 섞였으면 그 사실을 말로 돌려준다 —
     쓸지 말지는 화면 저쪽에서 정한다.
@@ -301,9 +329,10 @@ def pool(
     prescribed = prescribed or set()
     fitting = [clip for clip in clips() if _fits(clip, conditions)]
 
-    same = [clip for clip in fitting if clip.age_group == age_group]
-    other = [clip for clip in fitting if clip.age_group != age_group]
-    rank = lambda clip: _rank(clip, factor, prescribed, level)  # noqa: E731
+    ages = ages_for(age_group)
+    same = [clip for clip in fitting if clip.age_group in ages]
+    other = [clip for clip in fitting if clip.age_group not in ages]
+    rank = _age_rank(age_group, factor, prescribed, level)
     same.sort(key=rank)
     other.sort(key=rank)
     # 또래가 모자란지는 합치기 전 클립 수로 본다. 합친 뒤의 수로 보면 조건을 켠
