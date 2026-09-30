@@ -31,12 +31,14 @@ def _day(offset: int) -> compose.Slot:
 
 def _ids(payload, phase: str, n: int, taken: set[str] | None = None) -> list[str]:
     """그 단계에서 앞에서부터 n 개. 늘리는 동작은 준비·정리 두 단계에 다 있어서,
-    다른 단계에서 이미 고른 이름은 건너뛴다 — 같은 동작을 하루에 두 번 고르지 않게."""
+    다른 단계에서 이미 고른 이름은 건너뛴다 — 같은 동작을 하루에 두 번 고르지 않게.
+    이미 고른 영상의 다른 클립도 건너뛴다 — 한 회 안에서 한 영상이 여러 칸을 채우지 않게."""
     taken = taken if taken is not None else set()
     out = []
     for clip in payload["클립"]:
-        if clip["단계"] == phase and clip["이름"] not in taken and len(out) < n:
-            taken.add(clip["이름"])
+        fresh = clip["이름"] not in taken and clip["영상"] not in taken
+        if clip["단계"] == phase and fresh and len(out) < n:
+            taken |= {clip["이름"], clip["영상"]}
             out.append(clip["id"])
     return out
 

@@ -465,6 +465,7 @@ def _by_llm(
             {
                 "id": key,
                 "이름": clip.title,
+                "영상": clip.video_id,
                 "단계": clip.phase,
                 "요인": clip.fitness_factor or "",
                 "초": clip.duration_sec,
@@ -483,7 +484,8 @@ def _by_llm(
             "자리의 단계별_편수만큼만 고른다 — 화면에서 한 편을 여러 세트 반복해 "
             "시간을 채우므로 영상 길이의 합을 분에 맞출 필요가 없다. "
             "최근 이 true 인 클립은 이 사람이 요즘 받은 영상이다 — 같은 단계·요인의 다른 "
-            "클립이 모자랄 때만 고른다."
+            "클립이 모자랄 때만 고른다. 한 회 안에서는 영상 이 같은 클립을 둘 넘게 "
+            "고르지 않는다 — 다른 영상이 모자랄 때만 같은 영상을 다시 쓴다."
         ),
     }
 
@@ -513,7 +515,7 @@ def _by_llm(
         if not any(offered.values()):
             continue
 
-        chosen = _fill(offered, pool, catalog.clip_counts(slot.minutes), week, tally)
+        chosen = _fill(offered, pool, catalog.clip_counts(slot.minutes), week, tally, recent)
         week |= {clip.title for _, clip in chosen}
         # 코치가 골랐는데 이 회에서 빠진 동작. 글에 그 이름이 남아 있으면 못 쓴다.
         picked = {clip.title for clips in offered.values() for clip in clips}
@@ -549,39 +551,60 @@ def _fill(
     want: dict[str, int],
     week: set[str],
     tally: Tally,
+    recent: frozenset[str] = frozenset(),
 ) -> list[tuple[str, catalog.Clip]]:
     """단계마다 정한 편수를 채운다.
 
-    코치가 고른 것 중 이번 주에 안 쓴 것 → 목록에서 안 쓴 것 → 코치가 고른 쓴 것 →
-    목록에서 쓴 것 차례다. 코치는 편수를 모자라게 고르거나 이미 쓴 동작을 또
-    고른다 — 프롬프트로 시켜도 그렇다. 목록은 순위대로 서 있어 앞에서부터 채운다.
-    목록에도 없으면 모자란 채로 둔다. 조건을 몰래 풀지 않는다.
+    코치가 고른 새 것 → 목록의 새 것 → 코치가 고른 헌 것 → 목록의 헌 것 차례다.
+    헌 것은 이번 주에 쓴 동작이거나 최근(recent)에 받은 영상이다. 코치는 편수를
+    모자라게 고르거나 이미 쓴 동작 · 최근 영상을 또 고른다 — 프롬프트로 시켜도
+    그렇다. 목록은 순위대로 서 있어 앞에서부터 채운다. 목록에도 없으면 모자란
+    채로 둔다. 조건을 몰래 풀지 않는다.
+
+    한 회 안에서 한 영상이 여러 칸을 채우지 않게, 먼저 그 회에 아직 없는 영상으로만
+    채우고 모자라면 그때 같은 영상의 다른 클립을 쓴다. 한 영상의 클립이 일곱 칸 중
+    다섯 칸을 채운 적이 있다. 후보가 한 영상뿐이면(유아기) 그대로 다시 쓴다.
     """
     chosen: list[tuple[str, catalog.Clip]] = []
     today: set[str] = set()
+    videos: set[str] = set()
     # 코치가 그날 고른 동작은 목록에서 채울 때 건드리지 않는다. 늘리는 동작은 준비·정리
     # 두 단계에 다 있어서, 앞 단계를 채우다 코치가 뒤 단계에 둔 것을 먼저 가져간 적이 있다.
     reserved = {clip.title for clips in offered.values() for clip in clips}
+    # 영상도 같다. 목록에서 채우다 코치가 뒤 단계에 둔 영상의 다른 클립을 먼저 넣으면,
+    # 뒤 단계에서 코치가 고른 것이 「이미 나온 영상」 이 되어 밀려난다.
+    reserved_videos = {clip.video_id for clips in offered.values() for clip in clips}
     for phase in catalog.PHASES:
         picked = offered[phase]
         spare = [clip for clip in pool if clip.phase == phase and clip.title not in reserved]
+
+        def worn(clip: catalog.Clip) -> bool:
+            return clip.title in week or clip.video_id in recent
+
         order = (
-            [clip for clip in picked if clip.title not in week]
-            + [clip for clip in spare if clip.title not in week]
-            + [clip for clip in picked if clip.title in week]
-            + [clip for clip in spare if clip.title in week]
+            [clip for clip in picked if not worn(clip)]
+            + [clip for clip in spare if not worn(clip)]
+            + [clip for clip in picked if worn(clip)]
+            + [clip for clip in spare if worn(clip)]
         )
         count = 0
-        for clip in order:
-            if count == want[phase]:
-                break
-            if clip.title in today:
-                continue
-            today.add(clip.title)
-            chosen.append((phase, clip))
-            count += 1
-            if clip not in picked:
-                tally.filled += 1
+        for other_videos_only in (True, False):
+            for clip in order:
+                if count == want[phase]:
+                    break
+                if clip.title in today:
+                    continue
+                if other_videos_only and (
+                    clip.video_id in videos
+                    or (clip not in picked and clip.video_id in reserved_videos)
+                ):
+                    continue
+                today.add(clip.title)
+                videos.add(clip.video_id)
+                chosen.append((phase, clip))
+                count += 1
+                if clip not in picked:
+                    tally.filled += 1
     return chosen
 
 

@@ -42,12 +42,13 @@ def test_the_plan_may_only_use_clips_we_handed_over(monkeypatch: pytest.MonkeyPa
     def plan(payload):
         captured.update(payload)
         # 이름이 겹치지 않는 클립 셋을 고른다 — 같은 이름은 하루에 한 번뿐이다.
+        # 한 회 안에서 영상도 겹치지 않게 고른다 — 같은 영상은 다른 영상이 모자랄 때만 쓴다.
         seen: set[str] = set()
         ids = []
         for clip in payload["클립"]:
-            if clip["이름"] in seen:
+            if clip["이름"] in seen or clip["영상"] in seen:
                 continue
-            seen.add(clip["이름"])
+            seen |= {clip["이름"], clip["영상"]}
             ids.append(clip["id"])
             if len(ids) == 3:
                 break
