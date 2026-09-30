@@ -253,3 +253,17 @@ def test_the_focus_is_the_drivers_not_the_companions(monkeypatch: pytest.MonkeyP
     by_role = {read.profile.role: read for read in reads}
     assert by_role["주행자"].focused and by_role["주행자"].factor == "평형성"
     assert not by_role["동반자"].focused
+
+
+def test_a_focus_without_prescriptions_widens_the_factor_before_the_sex():
+    """만 11세 여자아이의 평형성 처방은 없다. 요인을 먼저 넓히고, 성별은 끝까지 지킨다.
+
+    여자아이 처방이 있는데 남자아이 처방을 근거로 들면 안 된다.
+    """
+    read = compose.read_profile(CHILD, "평형성")
+    assert read.chunks
+    assert all("-F-" in chunk.chunk_id for chunk in read.chunks), [
+        chunk.chunk_id for chunk in read.chunks
+    ]
+    assert all("-11-" in chunk.chunk_id for chunk in read.chunks)
+    assert read.notices and "평형성" in read.notices[0]

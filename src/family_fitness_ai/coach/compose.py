@@ -230,6 +230,7 @@ def _prescriptions(profile: RunProfile, factor: str, band: str) -> tuple[list[Ch
 
     same_sex = lambda f: f["sex"] == profile.sex  # noqa: E731
     same_factor = lambda f: not factor or f["factor"] == factor  # noqa: E731
+    wanted_factor = factor or "그 요인"
 
     ladder = (
         (
@@ -244,8 +245,20 @@ def _prescriptions(profile: RunProfile, factor: str, band: str) -> tuple[list[Ch
             f"{profile.age_group} 자료가 없어 같은 성별의 다른 연령대 자료를 썼습니다.",
             lambda f: same_sex(f) and same_factor(f),
         ),
+        # 요인을 먼저 넓히고 성별은 끝까지 지킨다. 여자아이 처방이 있는데 남자아이
+        # 처방을 근거로 들지 않는다.
         (
-            "요인을 좁히지 않고 그 연령대에 흔한 운동으로 골랐습니다.",
+            f"{wanted_factor} 처방 자료가 없어 같은 나이 처방 가운데 흔한 운동으로 골랐습니다.",
+            lambda f: int(f["age"]) == profile.age and same_sex(f),
+        ),
+        (
+            f"{wanted_factor} 처방 자료가 없어 같은 {profile.age_group} 처방 가운데 "
+            "흔한 운동으로 골랐습니다.",
+            lambda f: f["age_group"] == profile.age_group and same_sex(f),
+        ),
+        (
+            "같은 성별 처방 자료가 없어 요인과 성별을 좁히지 않고 "
+            "그 연령대에 흔한 운동으로 골랐습니다.",
             lambda f: f["age_group"] == profile.age_group,
         ),
         ("연령대를 가리지 않고 두루 쓰이는 운동으로 골랐습니다.", lambda f: True),
