@@ -1,0 +1,50 @@
+# ── Python ─────────────────────────────────────────────
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+dist/
+*.egg-info/
+.eggs/
+
+# 가상환경
+.venv/
+venv/
+env/
+
+# 캐시
+.ruff_cache/
+.mypy_cache/
+.pytest_cache/
+.coverage
+coverage.xml
+htmlcov/
+
+# ── 비밀값 ─────────────────────────────────────────────
+# .env.example만 커밋한다. 실제 키는 절대 올리지 않는다.
+.env
+.env.*
+!.env.example
+
+# ── 데이터 ─────────────────────────────────────────────
+data/*
+!data/release/
+!data/manifest.csv
+# 코퍼스 인덱스는 저장소에 둔다. 22MB 지만 이것이 없으면 검색·질문·편성이
+# 전부 서지 않고, 다시 만드는 코드가 아직 없어 받을 길이 저장소뿐이다.
+# 다시 만드는 코드가 생기면 그때 다시 판단한다.
+!data/index/
+models/
+*.faiss
+!data/index/corpus.faiss
+*.pkl
+
+# ── 도구·에디터 ────────────────────────────────────────
+.DS_Store
+.idea/
+.vscode/
+*.swp
+CLAUDE.local.md
+notebooks/.ipynb_checkpoints/

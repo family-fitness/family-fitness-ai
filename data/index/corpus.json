@@ -1,0 +1,12 @@
+{
+  "corpus_version": "2026-09-17.1",
+  "embedding_version": "embed:bge-m3/1024",
+  "dim": 1024,
+  "chunks": 4251,
+  "sources": {
+    "criteria": 66,
+    "prescription": 4137,
+    "video": 48
+  },
+  "built_at": "2026-09-17T00:28:05+00:00"
+}

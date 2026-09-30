@@ -1,0 +1,122 @@
+{
+  "run_id": "cr_01J7Q3M8VZ2KQ4HA",
+  "status": "succeeded",
+  "steps": [
+    {"seq": 1, "name": "assess", "status": "ok", "summary": "유연성 백분위 24 · 대상 요인 = 유연성"},
+    {"seq": 2, "name": "retrieve", "status": "ok", "summary": "처방 청크 4건 · 영상 후보 1편"},
+    {"seq": 3, "name": "compose", "status": "ok", "summary": "일일 3건 · 주간 1건 · 세션 6건"},
+    {"seq": 4, "name": "verify", "status": "ok", "summary": "인용 2건 · 금지 어휘 0건"}
+  ],
+  "proposal": {
+    "missions": [
+      {
+        "title": "월요일 다리 늘이기",
+        "period": {"start_date": "2026-09-07", "end_date": "2026-09-07"},
+        "participants": [{"ref": "p_c7a91f", "role": "주행자"}],
+        "sessions": [
+          {
+            "day_offset": 0,
+            "exercise_name": "다리 벌려 앞으로 상체 숙이기",
+            "fitness_factor": "유연성",
+            "duration_min": 15,
+            "video": {"video_id": "IdpXx2gm90o", "start_sec": 96},
+            "evidence": [1, 2]
+          }
+        ],
+        "copy": {
+          "child": "오늘은 다리를 넓게 벌리고 몸을 앞으로 기울여 볼까요",
+          "parent": "하루 15분이면 충분합니다. 무리해서 더 숙이게 하지 않아도 됩니다"
+        }
+      },
+      {
+        "title": "수요일 다리 늘이기",
+        "period": {"start_date": "2026-09-09", "end_date": "2026-09-09"},
+        "participants": [{"ref": "p_c7a91f", "role": "주행자"}],
+        "sessions": [
+          {
+            "day_offset": 0,
+            "exercise_name": "다리 모아 상체 숙이기",
+            "fitness_factor": "유연성",
+            "duration_min": 15,
+            "video": null,
+            "evidence": [1]
+          }
+        ],
+        "copy": {
+          "child": "이번에는 다리를 모으고 천천히 숙여 볼까요",
+          "parent": "영상이 붙지 않은 동작입니다. 운동명과 근거만으로 카드가 성립합니다"
+        }
+      },
+      {
+        "title": "금요일 전신 늘이기",
+        "period": {"start_date": "2026-09-11", "end_date": "2026-09-11"},
+        "participants": [{"ref": "p_c7a91f", "role": "주행자"}],
+        "sessions": [
+          {
+            "day_offset": 0,
+            "exercise_name": "전신 루틴 스트레칭",
+            "fitness_factor": "",
+            "duration_min": 15,
+            "video": null,
+            "evidence": [1]
+          }
+        ],
+        "copy": {
+          "child": "마지막은 온몸을 쭉 펴는 동작이에요",
+          "parent": "처방에서 가장 많이 나오는 동작입니다. 체력 요인은 자료에 비어 있습니다"
+        }
+      },
+      {
+        "title": "같이 늘이는 한 주",
+        "period": {"start_date": "2026-09-07", "end_date": "2026-09-13"},
+        "participants": [{"ref": "p_3d0b25", "role": "동반자"}],
+        "sessions": [
+          {
+            "day_offset": 0,
+            "exercise_name": "다리 벌려 앞으로 상체 숙이기",
+            "fitness_factor": "유연성",
+            "duration_min": 15,
+            "video": {"video_id": "IdpXx2gm90o", "start_sec": 96},
+            "evidence": [1, 2]
+          },
+          {
+            "day_offset": 3,
+            "exercise_name": "다리 모아 상체 숙이기",
+            "fitness_factor": "유연성",
+            "duration_min": 15,
+            "video": null,
+            "evidence": [1]
+          },
+          {
+            "day_offset": 5,
+            "exercise_name": "전신 루틴 스트레칭",
+            "fitness_factor": "",
+            "duration_min": 15,
+            "video": null,
+            "evidence": [1]
+          }
+        ],
+        "copy": {
+          "child": "엄마랑 한 주 동안 세 번 같이 늘여 볼까요",
+          "parent": "유연성은 지금 키우기 좋은 영역입니다. 주 3회 15분이면 충분합니다"
+        }
+      }
+    ],
+    "citations": [
+      {
+        "index": 1,
+        "label": "국민체력100 운동처방 · 유소년 11세",
+        "chunk_id": "prescription:유소년-11-F-0142",
+        "url": null
+      },
+      {
+        "index": 2,
+        "label": "국민체력100 운동영상 · 초등학생의 기초체력향상",
+        "chunk_id": "video:IdpXx2gm90o",
+        "url": "https://www.youtube.com/watch?v=IdpXx2gm90o"
+      }
+    ]
+  },
+  "refused": false,
+  "refusal_reason": null
+}

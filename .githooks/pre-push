@@ -1,0 +1,60 @@
+#!/usr/bin/env python3
+"""브랜치명 규약 검사 (푸시 직전).
+
+규약에 없는 이름의 브랜치가 원격에 생기면 되돌리기 번거롭다.
+main/develop 외에는 정해진 접두어를 쓴다.
+
+우회: git push --no-verify
+"""
+import re
+import sys
+
+# GitHub 브랜치 ruleset 원본:
+#   ^(feature|hotfix|chore|docs|release)/[\w\-]+
+PATTERN = re.compile(r"^(feature|hotfix|chore|docs|release)/[\w\-]+")
+
+PROTECTED = {"main", "master", "develop"}
+
+
+def main() -> int:
+    bad = []
+    for line in sys.stdin:
+        parts = line.split()
+        if len(parts) < 4:
+            continue
+        _local_ref, local_sha, remote_ref, _remote_sha = parts[:4]
+
+        if local_sha == "0" * 40:
+            continue  # 브랜치 삭제 푸시
+
+        if not remote_ref.startswith("refs/heads/"):
+            continue
+
+        branch = remote_ref[len("refs/heads/") :]
+        if branch in PROTECTED:
+            continue
+        if not PATTERN.match(branch):
+            bad.append(branch)
+
+    if not bad:
+        return 0
+
+    print("", file=sys.stderr)
+    print("✗ 브랜치명이 규약에 맞지 않습니다.", file=sys.stderr)
+    for b in bad:
+        print(f"  거절: {b}", file=sys.stderr)
+    print("", file=sys.stderr)
+    print("  형식: <feature|hotfix|chore|docs|release>/<이름>", file=sys.stderr)
+    print("    feature/AI-12-grade-card-percentile", file=sys.stderr)
+    print("    hotfix/AI-4-fix-null-citation", file=sys.stderr)
+    print("    release/v1-0-0", file=sys.stderr)
+    print("    chore/update-dependencies", file=sys.stderr)
+    print("    docs/api-guide", file=sys.stderr)
+    print("", file=sys.stderr)
+    print("  이름 바꾸기: git branch -m <새이름>", file=sys.stderr)
+    print("", file=sys.stderr)
+    return 1
+
+
+if __name__ == "__main__":
+    sys.exit(main())
