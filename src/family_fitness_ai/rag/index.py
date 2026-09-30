@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import csv
 import json
+import re
 import sys
 from dataclasses import dataclass
 from functools import lru_cache
@@ -15,6 +16,7 @@ from pathlib import Path
 import faiss
 import numpy as np
 
+from family_fitness_ai.common.copy import with_subject
 from family_fitness_ai.common.errors import temporarily_unavailable
 from family_fitness_ai.common.settings import settings
 
@@ -49,6 +51,37 @@ def _readable(text: str) -> str:
     for before, after in _REWRITE:
         text = text.replace(before, after)
     return text
+
+
+#: 처방표는 요인마다 등급 칸(1 · 2 · 3등급 · 참가)으로 나뉘어 있고, 코퍼스는 그 칸
+#: 이름을 인용 이름과 청크 글머리에 그대로 적어 두었다(「유소년 11세 심폐지구력
+#: 2등급」). 화면에 나오는 등급은 국민체력100 등급 카드(한 사람에 하나)뿐이라,
+#: 요인별 등급은 읽을 때 걷어 낸다. 인덱스를 다시 만들지 않아도 된다. 등급 칸은
+#: grade · chunk_id 에 남아 처방을 고를 때 그대로 쓴다.
+_LABEL_GRADE = re.compile(r"^(국민체력100 운동처방 · )(.+) (\S+) (?:\d등급|참가|미달)$")
+_TEXT_GRADE = re.compile(r" (\S+) (?:\d등급|참가|미달)인 ")
+
+
+def _without_grade_label(source: str, label: str) -> str:
+    """「… · 유소년 11세 심폐지구력 2등급」 → 「… · 심폐지구력이 비슷한 유소년 11세」."""
+    if source != "prescription":
+        return label
+    matched = _LABEL_GRADE.match(label)
+    if not matched:
+        return label
+    prefix, who, factor = matched.groups()
+    return f"{prefix}{with_subject(factor)} 비슷한 {who}"
+
+
+def _without_grade(source: str, text: str) -> str:
+    """처방 청크 글머리의 「심폐지구력 2등급인」 → 「심폐지구력 수준이 비슷한」.
+
+    글머리(「:」 앞)만 바꾼다. 뒤의 운동 목록은 자료 그대로다.
+    """
+    if source != "prescription":
+        return text
+    head, colon, rest = text.partition(":")
+    return _TEXT_GRADE.sub(r" \1 수준이 비슷한 ", head, count=1) + colon + rest
 
 
 @dataclass(frozen=True)
@@ -113,12 +146,13 @@ def corpus() -> Corpus:
     with (directory / "corpus_meta.csv").open(encoding="utf-8-sig", newline="") as fh:
         for row in csv.DictReader(fh):
             factors = tuple(f for f in (row.get("fitness_factors") or "").split("·") if f)
+            source = row["source"]
             chunks.append(
                 Chunk(
                     chunk_id=row["chunk_id"],
-                    source=row["source"],
-                    text=_readable(row["text"]),
-                    citation_label=_readable(row["citation_label"]),
+                    source=source,
+                    text=_without_grade(source, _readable(row["text"])),
+                    citation_label=_without_grade_label(source, _readable(row["citation_label"])),
                     citation_url=row.get("citation_url") or "",
                     age_group=row.get("age_group") or "",
                     factors=factors,

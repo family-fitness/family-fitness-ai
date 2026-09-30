@@ -8,15 +8,16 @@ from family_fitness_ai.coach import answer as coach_answer
 from family_fitness_ai.rag.index import Chunk
 from family_fitness_ai.rag.search import Hit, Result
 
-#: 처방 청크는 「그 등급인 사람들이 받은 본운동 처방 전체」다. 유연성 운동 목록이 아니다.
+#: 처방 청크는 「그 수준인 사람들이 받은 본운동 처방 전체」다. 유연성 운동 목록이 아니다.
+#: 글머리와 인용 이름은 요인별 등급을 걷어 낸 모습이다(rag.index 가 읽을 때 바꾼다).
 PRESCRIPTION = Chunk(
     chunk_id="prescription:유소년-12-M-유연성-1",
     source="prescription",
     text=(
-        "유소년 12세 남자 중 유연성 1등급인 1,170명에게 처방된 본운동: "
+        "유소년 12세 남자 중 유연성 수준이 비슷한 1,170명에게 처방된 본운동: "
         "왕복달리기(6%), 엎드려 팔 대고 버티기(4%), 1단 줄넘기(4%), 팔굽혀펴기(3%)"
     ),
-    citation_label="국민체력100 운동처방 · 유소년 12세 유연성 1등급",
+    citation_label="국민체력100 운동처방 · 유연성이 비슷한 유소년 12세",
     citation_url="",
     age_group="유소년",
     factors=("유연성",),
@@ -64,7 +65,7 @@ def test_the_llm_is_told_a_prescription_is_not_a_list_for_that_factor(found):
 
 def test_the_rule_sentence_says_who_received_the_prescription(found):
     written = coach_answer.answer(QUESTION, "유소년")["answer"]
-    assert "유연성 1등급인 1,170명에게 처방된 본운동" in written
+    assert "유연성 수준이 비슷한 1,170명에게 처방된 본운동" in written
     assert "왕복달리기" in written
     assert "기르" not in written and "위해" not in written
 

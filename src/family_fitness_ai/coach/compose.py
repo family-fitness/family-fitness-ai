@@ -157,15 +157,27 @@ class Plan:
 
 @dataclass
 class Citations:
-    """인용 번호를 매긴다. 같은 청크는 한 번만 센다."""
+    """인용 번호를 매긴다. 같은 청크는 한 번만 센다.
+
+    처방은 이름이 같으면 한 번호로 합친다. 인용 이름에서 요인별 등급을 걷어 내
+    (rag.index) 같은 나이 · 요인의 2등급 칸과 3등급 칸이 같은 이름이 되었다 —
+    근거 목록에 같은 이름이 둘 나오지 않게 한다.
+    """
 
     order: list[Chunk] = field(default_factory=list)
     index: dict[str, int] = field(default_factory=dict)
+    by_label: dict[str, int] = field(default_factory=dict)
 
     def add(self, chunk: Chunk) -> int:
-        if chunk.chunk_id not in self.index:
-            self.order.append(chunk)
-            self.index[chunk.chunk_id] = len(self.order)
+        if chunk.chunk_id in self.index:
+            return self.index[chunk.chunk_id]
+        if chunk.source == "prescription" and chunk.citation_label in self.by_label:
+            self.index[chunk.chunk_id] = self.by_label[chunk.citation_label]
+            return self.index[chunk.chunk_id]
+        self.order.append(chunk)
+        self.index[chunk.chunk_id] = len(self.order)
+        if chunk.source == "prescription":
+            self.by_label[chunk.citation_label] = len(self.order)
         return self.index[chunk.chunk_id]
 
     def dump(self) -> list[dict[str, Any]]:
@@ -668,8 +680,9 @@ def _checked_text(
     """코치가 쓴 글을 칸마다 잰다. 어긋난 칸만 규칙 문구로 바꾼다.
 
     길이(title 16 · child 45 · parent 70)와 금지 어휘, 이 회에서 빠진 동작의
-    이름, 그 자리와 다른 요일(주간이면 어느 요일이든), 그리고 제목에 요인 이름
-    대신 들어온 이유 문구(「지금 키우기 좋은 영역」)를 본다. 프롬프트로
+    이름, 그 자리와 다른 요일(주간이면 어느 요일이든), 제목에 요인 이름
+    대신 들어온 이유 문구(「지금 키우기 좋은 영역」), 그리고 요인별 등급
+    (「심폐지구력 2등급」 — 화면의 등급은 국민체력100 등급 카드뿐이다)을 본다. 프롬프트로
     시키지만 지켜지지 않았다 — 주간 parent 가 92자로 나간 적이 있다. 반쯤 고쳐 쓰지
     않는다. 그 칸을 통째로 바꾼다.
     """
@@ -685,6 +698,7 @@ def _checked_text(
             and not any(name in value for name in dropped)
             and not any(day in value for day in _WEEKDAYS if day != weekday)
             and not (key == "title" and coach_llm.names_the_reason(value))
+            and not words.grades_in(value)
         )
         if fits:
             out[key] = str(value)
@@ -850,7 +864,8 @@ def build(
             notices.append(pool_notice)
         if not pool:
             continue
-        evidence_base = [citations.add(chunk) for chunk in read.chunks[:2]]
+        # 이름이 같은 처방 둘은 한 번호가 된다(Citations). 번호는 한 번만 둔다.
+        evidence_base = list(dict.fromkeys(citations.add(chunk) for chunk in read.chunks[:2]))
         mine = [{"ref": read.profile.ref, "role": read.profile.role}] + cheerers
         slots = [
             Slot("일간", offset, constraints.minutes_per_session, mine) for offset in day_slots

@@ -6,6 +6,8 @@ band·factor 같은 코드값은 화면에 나가지 않는다. 표시 문구는
 
 from __future__ import annotations
 
+import re
+
 DISCLAIMER = (
     "국민체력100 측정 데이터를 바탕으로 한 참고 정보입니다. "
     "질병의 진단·치료를 위한 것이 아니며, 건강에 관한 판단은 전문가와 상담하세요."
@@ -78,6 +80,27 @@ def with_topic(noun: str) -> str:
     if 0xAC00 <= last <= 0xD7A3:
         return noun + ("은" if (last - 0xAC00) % 28 else "는")
     return noun + "은(는)"
+
+
+def with_subject(noun: str) -> str:
+    """받침을 보고 이/가를 붙인다. 「유연성이」 · 「자세가」."""
+    if not noun:
+        return noun
+    last = ord(noun[-1])
+    if 0xAC00 <= last <= 0xD7A3:
+        return noun + ("이" if (last - 0xAC00) % 28 else "가")
+    return noun + "이(가)"
+
+
+#: 「2등급」 「3 등급」. 화면에 나오는 등급은 국민체력100 등급 카드(한 사람에 하나)
+#: 뿐이다. 처방표는 요인마다 등급 칸으로 나뉘어 있어, 코치가 그 칸 이름을 옮겨
+#: 「심폐지구력 2등급」 처럼 요인별 등급을 쓴 적이 있다.
+_GRADE = re.compile(r"\d\s*등급")
+
+
+def grades_in(text: str) -> set[str]:
+    """글에 나오는 등급 말. 「2 등급」도 「2등급」으로 센다."""
+    return {re.sub(r"\s", "", found) for found in _GRADE.findall(text)}
 
 
 def factor_copy(factor: str, band: str) -> str:
