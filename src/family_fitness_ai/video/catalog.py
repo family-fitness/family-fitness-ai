@@ -14,7 +14,7 @@ from __future__ import annotations
 
 import csv
 import hashlib
-from collections.abc import Callable
+from collections.abc import Callable, Collection
 from dataclasses import dataclass
 from functools import lru_cache
 
@@ -294,8 +294,52 @@ def _age_rank(
     return rank
 
 
+#: recent 목록에서 한 날로 묶어 볼 id 수. BE 가 부르는 하루 편성(20분) 한 회의 칸 수다.
+DAY_IDS = 7
+
+
+def least_recent_first(
+    recent: Collection[str], seed: str = "", per_day: int = DAY_IDS
+) -> Callable[[Clip], tuple[int, int, str]]:
+    """최근에 받은 영상끼리의 차례. 오래전에 받은 것이 앞에 선다.
+
+    recent 는 BE 가 보내는 차례 그대로다 — 최근 미션부터, 한 미션 안은 칸 차례, 겹치면
+    한 번만. 뒤쪽일수록 오래전에 받았다. 예전에는 집합으로만 봐서 최근 영상끼리는
+    순위 그대로 섰고, 요인이 맞는 새 후보가 떨어지면 날마다 같은 상위 몇 편이 다시
+    나왔다(12세 순발력 본운동이 9일 내내 같은 넷).
+
+    다만 한 미션 안의 칸 차례는 받은 때가 아니다. 여기서 새 영상 → 오래전에 받은
+    영상 차례로 고르므로, 같은 날 받은 것 중 앞 칸이 그 전에 더 오래 쉰 영상이다.
+    목록 차례를 그대로 믿으면 뒤 칸 — 그 전날에도 받은 영상 — 이 가장 오래된 것처럼
+    보여 날마다 다시 뽑혔다(5세 민첩성 본운동 한 편이 13일 잇달아). 그래서 per_day
+    (한 회 칸 수)개씩을 한 날로 묶고, 그 안에서는 앞 칸을 더 오래된 것으로 본다.
+    받은 때가 같으면(한 영상의 여러 클립) seed 로 섞는다.
+
+    차례가 없는 집합(set · frozenset)을 넘기면 모두 같은 때 받은 것으로 본다. 목록에
+    없는 영상은 가장 오래된 것으로 친다.
+    """
+    if isinstance(recent, (set, frozenset)):
+        places = dict.fromkeys(recent, 0)
+    else:
+        places = {}
+        for place, video_id in enumerate(recent):
+            places.setdefault(video_id, place)
+    oldest = len(recent)
+    per_day = max(1, per_day)
+
+    def key(clip: Clip) -> tuple[int, int, str]:
+        place = places.get(clip.video_id, oldest)
+        return -(place // per_day), place, shuffle_key(clip, seed)
+
+    return key
+
+
 def _defer_recent(
-    ranked: list[Clip], factor: str, recent: frozenset[str], seed: str = ""
+    ranked: list[Clip],
+    factor: str,
+    recent: Collection[str],
+    seed: str = "",
+    per_day: int = DAY_IDS,
 ) -> list[Clip]:
     """최근에 받은 영상을 뒤로 미룬다. 빼지는 않는다.
 
@@ -304,28 +348,28 @@ def _defer_recent(
     다시 쓰인다. 단계가 서 있던 자리는 바꾸지 않는다 — 목록을 자르는 곳(pool 의
     limit)에서 단계별 몫이 달라지지 않게.
 
-    한 단계의 후보가 모두 최근 영상이면 순위 대신 seed 로 섞는다. 유아기 정리운동
-    후보 일곱은 모두 한 영상에서 나와 늘 최근이다. 순위대로 두면 점수가 가장 높은
-    클립이 날마다 맨 앞에 섰다(14일 중 13일).
+    최근 영상끼리는 순위 대신 오래전에 받은 것부터 세운다(least_recent_first). 같은
+    때 받은 것끼리는 seed 로 섞는다. 유아기 정리운동 후보 일곱은 모두 한 영상에서
+    나와 늘 최근이다. 순위대로 두면 점수가 가장 높은 클립이 날마다 맨 앞에
+    섰다(14일 중 13일).
     """
     if not recent:
         return ranked
+    older_first = least_recent_first(recent, seed, per_day)
     out = list(ranked)
     for phase in {clip.phase for clip in ranked}:
         places = [i for i, clip in enumerate(ranked) if clip.phase == phase]
         group = [ranked[i] for i in places]
         matches = [not factor or clip.fitness_factor == factor for clip in group]
         fresh = [c for c in group if c.video_id not in recent]
-        if not fresh and seed:
-            for place, clip in zip(
-                places, sorted(group, key=lambda c: shuffle_key(c, seed)), strict=True
-            ):
-                out[place] = clip
-            continue
-        stale_match = [c for c, m in zip(group, matches, strict=True) if m and c.video_id in recent]
-        stale_other = [
-            c for c, m in zip(group, matches, strict=True) if not m and c.video_id in recent
-        ]
+        stale_match = sorted(
+            (c for c, m in zip(group, matches, strict=True) if m and c.video_id in recent),
+            key=older_first,
+        )
+        stale_other = sorted(
+            (c for c, m in zip(group, matches, strict=True) if not m and c.video_id in recent),
+            key=older_first,
+        )
         last_match = max(
             (i for i, c in enumerate(fresh) if not factor or c.fitness_factor == factor),
             default=-1,
@@ -353,7 +397,7 @@ def routine(
     exclude: set[str] | None = None,
     level: int | None = None,
     seed: str = "",
-    recent: frozenset[str] = frozenset(),
+    recent: Collection[str] = (),
     focus: str = "",
 ) -> dict[str, list[Clip]]:
     """한 회분 클립을 단계별로 고른다.
@@ -364,8 +408,13 @@ def routine(
     같은 동작을 두 번 넣지 않는다. 조건에 걸려 남는 클립이 없으면 그 단계는 빈
     채로 둔다 — 조건을 몰래 풀어 아무거나 채우지 않는다.
 
-    seed(편성 시작일)로 같은 순위끼리 섞고, recent(최근에 받은 영상 id)는 뒤로
-    미룬다(_defer_recent). 둘 다 비우면 예전과 같은 차례다.
+    seed(편성 시작일)로 같은 순위끼리 섞고, recent(최근에 받은 영상 id, 최근 것부터)는
+    뒤로 미룬다(_defer_recent). 최근 영상끼리는 오래전에 받은 것이 먼저다. 둘 다
+    비우면 예전과 같은 차례다.
+
+    한 회 안에서는 같은 영상을 두 번 쓰지 않는다 — 그 단계에 아직 안 쓴 영상의
+    후보가 남아 있으면. 모자라면 그때 이미 쓴 영상의 다른 클립을 쓴다. 유아기는
+    후보 영상이 몇 편 안 돼 한 회에 같은 영상이 두 번씩 나왔다(14일 중 13일).
 
     focus(보호자가 키워 주고 싶은 역량)가 있으면 본운동 칸의 4분의 3(focus_quota)을
     먼저 그 역량 클립으로 채운다. 그 역량 후보가 모자라면 최근에 받은 영상 → 앞선
@@ -383,22 +432,39 @@ def routine(
     picked: dict[str, list[Clip]] = {phase: [] for phase in PHASES}
     # 날마다 같은 차림을 내지 않으려고, 앞선 날에 쓴 동작을 빼고 고른다.
     used: set[str] = set(exclude or ())
+    videos: set[str] = set()
     for phase in PHASES:
         candidates = [clip for clip in pool if clip.phase == phase]
         if candidates and all(clip.title in used for clip in candidates):
             # 뺄 것을 빼고 나니 남는 게 없다. 그 단계만 처음으로 되돌린다.
             used -= {clip.title for clip in candidates}
-        ranked = _defer_recent(sorted(candidates, key=rank), factor, recent, seed)
+        ranked = _defer_recent(
+            sorted(candidates, key=rank), factor, recent, seed, sum(want.values())
+        )
         if focus and phase == "본운동":
-            _pick_focus(picked[phase], ranked, focus, focus_quota(want[phase]), used, recent)
-        for clip in ranked:
-            if len(picked[phase]) >= want[phase]:
-                break
-            if clip.title in used:
-                continue
-            picked[phase].append(clip)
-            used.add(clip.title)
+            quota = focus_quota(want[phase])
+            _pick_focus(picked[phase], ranked, focus, quota, used, recent, videos)
+        _take(picked[phase], ranked, want[phase], used, videos)
     return picked
+
+
+def _take(
+    picked: list[Clip], order: list[Clip], want: int, used: set[str], videos: set[str]
+) -> None:
+    """order 차례로 picked 를 want 편까지 채운다. picked · used · videos 를 고친다.
+
+    쓴 동작(used)은 건너뛴다. 먼저 이 회에 아직 없는 영상만 보고, 모자라면 이미 나온
+    영상의 다른 클립도 쓴다.
+    """
+    for other_videos_only in (True, False):
+        for clip in order:
+            if len(picked) >= want:
+                return
+            if clip.title in used or (other_videos_only and clip.video_id in videos):
+                continue
+            picked.append(clip)
+            used.add(clip.title)
+            videos.add(clip.video_id)
 
 
 def _pick_focus(
@@ -407,23 +473,23 @@ def _pick_focus(
     focus: str,
     quota: int,
     used: set[str],
-    recent: frozenset[str],
+    recent: Collection[str],
+    videos: set[str],
 ) -> None:
-    """본운동 앞 quota 칸을 focus 클립으로 채운다. picked · used 를 고친다.
+    """본운동 앞 quota 칸을 focus 클립으로 채운다. picked · used · videos 를 고친다.
 
     차례: 새 동작의 새 영상 → 새 동작의 최근 영상 → 앞선 날에 쓴 동작. 순위(ranked)
-    안에서의 차례는 그대로 둔다. 오늘 이미 넣은 동작은 다시 넣지 않는다.
+    안에서의 차례는 그대로 둔다 — 최근 영상끼리는 _defer_recent 가 이미 오래전에
+    받은 것부터 세워 두었다. 오늘 이미 넣은 동작은 다시 넣지 않고, 이 회에 아직 없는
+    영상을 먼저 쓴다(_take).
     """
     earlier = set(used)
     mine = [clip for clip in ranked if clip.fitness_factor == focus]
     order = sorted(mine, key=lambda clip: (clip.title in earlier, clip.video_id in recent))
-    for clip in order:
-        if len(picked) >= quota:
-            break
-        if clip.title in {c.title for c in picked}:
-            continue
-        picked.append(clip)
-        used.add(clip.title)
+    today = used - earlier
+    # 앞선 날에 쓴 동작도 그 역량이면 다시 쓸 수 있다. 오늘 넣은 것만 막는다.
+    _take(picked, order, quota, today, videos)
+    used |= today
 
 
 def pool(
@@ -435,7 +501,7 @@ def pool(
     limit: int = 120,
     level: int | None = None,
     seed: str = "",
-    recent: frozenset[str] = frozenset(),
+    recent: Collection[str] = (),
 ) -> tuple[list[Clip], str]:
     """고를 만한 클립과, 또래 밖까지 갔는지 알리는 말.
 

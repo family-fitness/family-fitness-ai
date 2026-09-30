@@ -18,7 +18,7 @@ Role = Literal["주행자", "동반자", "응원"]
 Measurements = dict[str, float]
 
 #: recent_video_ids 를 몇 개까지 보나.
-RECENT_LIMIT = 60
+RECENT_LIMIT = 150
 
 
 def _no_blood_pressure(values: Measurements | None) -> Measurements | None:
@@ -103,7 +103,7 @@ class ConstraintsIn(BaseModel):
     @field_validator("recent_video_ids")
     @classmethod
     def _recent_first(cls, value: list[str]) -> list[str]:
-        # 약속은 최근 것부터 60개까지다. 더 오면 거절하지 않고 앞의 60개만 본다 —
+        # 약속은 최근 것부터 150개까지다. 더 오면 거절하지 않고 앞의 150개만 본다 —
         # 편성이 통째로 떨어지는 것보다 오래된 몇 개를 덜 미루는 편이 낫다.
         return [video_id for video_id in value if video_id][:RECENT_LIMIT]
 

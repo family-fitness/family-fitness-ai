@@ -19,6 +19,7 @@ import pytest
 from conftest import needs_index, needs_release
 
 from family_fitness_ai.api import app as api
+from family_fitness_ai.api import schemas
 from family_fitness_ai.coach import compose
 from family_fitness_ai.rag.index import corpus
 from family_fitness_ai.video import catalog
@@ -155,7 +156,7 @@ def test_the_request_takes_recent_video_ids(monkeypatch: pytest.MonkeyPatch):
     from fastapi.testclient import TestClient
 
     client = TestClient(api.app)
-    many = [f"v{n}" for n in range(80)]
+    many = [f"v{n}" for n in range(200)]
     response = client.post(
         "/v1/coach/runs",
         json={
@@ -166,8 +167,9 @@ def test_the_request_takes_recent_video_ids(monkeypatch: pytest.MonkeyPatch):
     )
     assert response.status_code == 202
     recent = captured["constraints"].recent_video_ids
-    # 최근 것부터 60개까지만 본다. 모르는 id 는 거르지 않고 그대로 둔다 — 고를 때 안 걸릴 뿐이다.
-    assert recent[0] == "0AUDLJ08S_00351" and len(recent) == 60
+    # 최근 것부터 150개(RECENT_LIMIT)까지만 본다. 모르는 id 는 거르지 않고 그대로 둔다
+    # — 고를 때 안 걸릴 뿐이다.
+    assert recent[0] == "0AUDLJ08S_00351" and len(recent) == schemas.RECENT_LIMIT == 150
 
 
 def test_the_request_without_recent_video_ids_still_works(monkeypatch: pytest.MonkeyPatch):

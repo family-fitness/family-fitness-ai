@@ -24,6 +24,7 @@ AI 는 DB 에 쓰지 않는다. 여기서 나오는 것은 **제안**이고, 저
 from __future__ import annotations
 
 import re
+from collections.abc import Collection
 from dataclasses import dataclass, field
 from datetime import date, timedelta
 from typing import Any
@@ -119,11 +120,12 @@ class Constraints:
     with_companion: bool = False
     #: 그 사람이 최근 14일 동안 미션으로 받은 영상 id(유튜브 id 또는 공단 파일 이름),
     #: 최근 것부터. 후보를 고를 때 뒤로 미룬다 — 다른 후보가 모자랄 때만 다시 쓴다.
+    #: 다시 쓸 때는 오래전에 받은 것부터 쓴다. 그래서 차례를 버리지 않는다.
     recent_video_ids: tuple[str, ...] = ()
 
     @property
-    def recent(self) -> frozenset[str]:
-        return frozenset(self.recent_video_ids)
+    def recent(self) -> tuple[str, ...]:
+        return self.recent_video_ids
 
     def conditions(self) -> catalog.Conditions:
         return catalog.Conditions(
@@ -590,7 +592,7 @@ def _fill(
     want: dict[str, int],
     week: set[str],
     tally: Tally,
-    recent: frozenset[str] = frozenset(),
+    recent: Collection[str] = (),
     seed: str = "",
     focus: str = "",
 ) -> list[tuple[str, catalog.Clip]]:
@@ -606,9 +608,11 @@ def _fill(
     채우고 모자라면 그때 같은 영상의 다른 클립을 쓴다. 한 영상의 클립이 일곱 칸 중
     다섯 칸을 채운 적이 있다. 후보가 한 영상뿐이면(유아기) 그대로 다시 쓴다.
 
-    한 단계의 후보가 모두 헌 것이면 코치가 고른 것을 앞세우지 않고 seed(편성
-    시작일)로 섞는다. 유아기 정리운동 후보 일곱이 모두 한 영상에서 나와 늘 최근이라,
-    코치가 날마다 고르는 같은 클립이 14일 중 13일 나왔다.
+    헌 것끼리는 코치가 고른 것을 앞세우지 않는다. 이번 주에 안 쓴 동작 → 오래전에
+    받은 영상(catalog.least_recent_first) 차례고, 같은 때 받은 것끼리는 seed(편성
+    시작일)로 섞는다. 코치는 날마다 같은 최근 영상을 고른다. 유아기 정리운동 후보
+    일곱이 모두 한 영상에서 나와 늘 최근이라, 코치가 고른 같은 클립이 14일 중 13일
+    나왔다.
 
     focus(보호자가 키워 주고 싶은 역량)가 있으면 본운동은 먼저 4분의 3 칸
     (catalog.focus_quota)을 그 역량 클립으로 채운다. 코치가 고른 그 역량 클립 →
@@ -635,14 +639,15 @@ def _fill(
         def worn(clip: catalog.Clip) -> bool:
             return clip.title in week or clip.video_id in recent
 
+        older_first = catalog.least_recent_first(recent, seed, sum(want.values()))
         order = (
             [clip for clip in picked if not worn(clip)]
             + [clip for clip in spare if not worn(clip)]
-            + [clip for clip in picked if worn(clip)]
-            + [clip for clip in spare if worn(clip)]
+            + sorted(
+                [clip for clip in picked if worn(clip)] + [clip for clip in spare if worn(clip)],
+                key=lambda clip: (clip.title in week, older_first(clip)),
+            )
         )
-        if seed and order and all(worn(clip) for clip in order):
-            order.sort(key=lambda clip: (clip.title in week, catalog.shuffle_key(clip, seed)))
         rounds = [(order, want[phase])]
         if focus and phase == "본운동":
             mine = [clip for clip in order if clip.fitness_factor == focus]
