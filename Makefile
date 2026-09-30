@@ -1,4 +1,4 @@
-.PHONY: verify lint types test tables ocr-name clips clip-labels kspo medical embed-model serve probe
+.PHONY: verify lint types test tables ocr-name clips clip-labels kspo medical embed-model serve serve-prod probe
 
 ## 가상환경을 켜 두었으면 그대로, 아니면 `make verify PY=.venv/bin/python`.
 PY ?= python
@@ -67,6 +67,13 @@ embed-model:
 ## 개발용. 코드를 고칠 때마다 다시 뜨니 모델은 처음 쓸 때 올린다(EMBEDDING_WARMUP=0).
 serve:
 	EMBEDDING_WARMUP=0 $(PY) -m uvicorn family_fitness_ai.api.app:app --reload --port 8000
+
+## 운영용. --reload 없이 띄우고, 모델은 띄울 때 올린다(EMBEDDING_WARMUP 기본 켜짐).
+## 인증이 없으니 AI_HOST 는 BE 만 닿는 주소로 둔다 — 공개 포트에 붙이지 않는다.
+AI_HOST ?= 127.0.0.1
+AI_PORT ?= 8000
+serve-prod:
+	$(PY) -m uvicorn family_fitness_ai.api.app:app --host $(AI_HOST) --port $(AI_PORT)
 
 ## 돌고 있는 서비스에 요청을 보내 눈으로 확인한다. `make serve` 를 먼저 띄운다.
 probe:
