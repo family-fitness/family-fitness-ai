@@ -70,10 +70,12 @@ serve:
 
 ## 운영용. --reload 없이 띄우고, 모델은 띄울 때 올린다(EMBEDDING_WARMUP 기본 켜짐).
 ## 인증이 없으니 AI_HOST 는 BE 만 닿는 주소로 둔다 — 공개 포트에 붙이지 않는다.
+## 워커는 하나다. 실행(/v1/coach/runs)은 프로세스 메모리에만 있어서, 워커가 둘이면
+## BE 의 폴링이 다른 워커로 가 404 run_not_found 가 나고 BE 는 대체 편성으로 빠진다.
 AI_HOST ?= 127.0.0.1
 AI_PORT ?= 8000
 serve-prod:
-	$(PY) -m uvicorn family_fitness_ai.api.app:app --host $(AI_HOST) --port $(AI_PORT)
+	$(PY) -m uvicorn family_fitness_ai.api.app:app --host $(AI_HOST) --port $(AI_PORT) --workers 1
 
 ## 돌고 있는 서비스에 요청을 보내 눈으로 확인한다. `make serve` 를 먼저 띄운다.
 probe:

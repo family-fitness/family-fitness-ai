@@ -106,8 +106,15 @@ make embed-model
 
 # 4. --reload 없이 띄운다. AI_HOST 는 BE 만 닿는 주소로(아래)
 make serve-prod AI_HOST=127.0.0.1 AI_PORT=8000
-#    = python -m uvicorn family_fitness_ai.api.app:app --host 127.0.0.1 --port 8000
+#    = python -m uvicorn family_fitness_ai.api.app:app --host 127.0.0.1 --port 8000 --workers 1
 ```
+
+**워커는 하나로만 띄운다.** 편성 실행(`/v1/coach/runs`)은 그 프로세스 메모리에만
+있다(`coach/runs.py` 의 `Store`). `--workers 2` 처럼 여럿으로 띄우면 BE 가 실행을 만든
+워커와 결과를 묻는 워커가 달라져 `404 run_not_found` 가 나고, BE 는 AI 편성을 버리고
+라벨 기반 대체 편성으로 빠진다. gunicorn 이나 컨테이너 설정으로 띄울 때도 워커 수
+(`--workers`, `WEB_CONCURRENCY`)를 1 로 둔다. 같은 까닭으로 AI 를 여러 대 띄워 BE 앞에
+나눠 붙이지도 않는다. 늘리려면 실행 저장소를 프로세스 밖으로 옮기는 설계 변경이 먼저다.
 
 띄울 때 이것을 본다. 하나라도 어긋나면 서버가 뜨지 않고 까닭을 남긴다.
 
