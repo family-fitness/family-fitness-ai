@@ -36,6 +36,24 @@ def test_long_fields_are_allowed_within_a_c_long(windows_csv):
     assert windows_csv and all(value <= _C_LONG_MAX for value in windows_csv)
 
 
+def test_factors_split_on_either_separator():
+    # 처방 줄은 「·」 로, 영상 줄은 「;」 로 요인을 잇는다.
+    # 한쪽만 나누면 영상 요인이 한 덩어리가 된다.
+    assert index._factors("근력;근지구력;협응력") == ("근력", "근지구력", "협응력")
+    assert index._factors("근력·유연성") == ("근력", "유연성")
+    assert index._factors("") == ()
+
+
+@needs_index
+def test_video_chunks_keep_each_factor_apart():
+    index.corpus.cache_clear()
+    try:
+        joined = [f for c in index.corpus().chunks for f in c.factors if ";" in f or "·" in f]
+        assert joined == []
+    finally:
+        index.corpus.cache_clear()
+
+
 @needs_index
 def test_the_corpus_loads_where_a_c_long_is_32_bits(windows_csv):
     index.corpus.cache_clear()

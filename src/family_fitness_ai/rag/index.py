@@ -73,6 +73,16 @@ def _without_grade_label(source: str, label: str) -> str:
     return f"{prefix}{with_subject(factor)} 비슷한 {who}"
 
 
+#: 처방 줄은 요인을 「·」 로, 영상 줄은 「;」 로 잇는다(「근력;근지구력;협응력」).
+#: 「·」 로만 나누면 영상 요인이 한 덩어리 글자가 되어, 요인으로 거르는 검색에서 빠졌다.
+_FACTOR_SEPARATOR = re.compile(r"[·;]")
+
+
+def _factors(raw: str) -> tuple[str, ...]:
+    """요인 칸을 요인 하나씩으로 나눈다. 두 구분자를 모두 받는다."""
+    return tuple(f.strip() for f in _FACTOR_SEPARATOR.split(raw) if f.strip())
+
+
 def _without_grade(source: str, text: str) -> str:
     """처방 청크 글머리의 「심폐지구력 2등급인」 → 「심폐지구력 수준이 비슷한」.
 
@@ -159,7 +169,7 @@ def corpus() -> Corpus:
     chunks = []
     with (directory / "corpus_meta.csv").open(encoding="utf-8-sig", newline="") as fh:
         for row in csv.DictReader(fh):
-            factors = tuple(f for f in (row.get("fitness_factors") or "").split("·") if f)
+            factors = _factors(row.get("fitness_factors") or "")
             source = row["source"]
             chunks.append(
                 Chunk(
