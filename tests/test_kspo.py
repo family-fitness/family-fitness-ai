@@ -8,6 +8,7 @@ API 를 부르지 않는다. 받아 둔 원자료에서 사례마다 한 영상�
 
 from __future__ import annotations
 
+import csv
 import json
 import traceback
 from datetime import date
@@ -38,6 +39,12 @@ def _table() -> tuple[tuple[tuple[str, str], ...], ...]:
 def _rows(case: str) -> list[dict[str, str]]:
     video_id = Path(CASES[case]).stem
     return [dict(row) for row in _table() if dict(row)["video_id"] == video_id]
+
+
+def _case_row(case: str) -> dict:
+    """그 사례 영상의 가이드 장면 한 줄."""
+    file_nm = CASES[case]
+    return next(row for row in FIXTURE["rows"][kspo.GUIDE] if row["file_nm"] == file_nm)
 
 
 def _clip(**given) -> catalog.Clip:
@@ -373,6 +380,51 @@ def test_video_search_gives_seniors_the_adult_kspo_clips():
     adult = kspo_hits("성인", ("유연성",), ())
     assert senior
     assert {h["video_id"] for h in senior} == {h["video_id"] for h in adult}
+
+
+# ── 설명이 적은 갈래 ─────────────────────────────────────────────────────────
+# 운동처방가이드 「운동프로그램」 묶음은 API 가 체력요인을 모두 「유연성」으로 적는다.
+# 설명은 「유산소운동에 해당하는 빠르게 걷기」 「가슴운동에 해당하는 팔굽혀펴기」다.
+
+
+@pytest.mark.parametrize(
+    ("description", "factors"),
+    [
+        ("운동프로그램 중, 유산소운동에 해당하는 빠르게 걷기운동을 설명한", ("심폐지구력",)),
+        ("체력 증진 운동프로그램 중, 가슴운동에 해당하는 팔굽혀펴기운동을", ("근력",)),
+        ("유연성 운동 중, 스트레칭에 해당하는 목 옆으로 늘리기운동을", ("유연성",)),
+        ("유연성 운동 중, 고양이 자세운동을 설명한", ()),
+        ("", ()),
+    ],
+)
+def test_the_kind_in_the_description_gives_the_factor(description, factors):
+    assert kspo.kind_factors(description) == factors
+
+
+def test_the_kind_beats_the_api_factor():
+    scene = dict(_case_row("가이드 · 요인·수준이 제 칸에"))
+    scene.update(
+        file_nm="X_kind.mp4",
+        trng_nm="빠르게 걷기",
+        vdo_ttl_nm="빠르게 걷기(3단계)",
+        ftns_fctr_nm="유연성",
+        vdo_desc="운동프로그램 중, 유산소운동에 해당하는 빠르게 걷기운동을 설명한 동영상",
+    )
+    rows = kspo.build({kspo.GUIDE: [scene]}, {"X_kind.mp4": True}, borrowed={})
+    assert rows
+    assert {(r["fitness_factor"], r["phase"]) for r in rows} == {("심폐지구력", "본운동")}
+
+
+@needs_release
+@has_table
+def test_walking_and_push_ups_are_not_flexibility_in_the_table():
+    rows = list(csv.DictReader((settings().release_dir / kspo.OUT).open(encoding="utf-8")))
+    factors = {
+        (r["video_id"], r["fitness_factor"])
+        for r in rows
+        if r["video_id"] in ("0AUDLJ08S_00601", "0AUDLJ08S_00602")
+    }
+    assert factors == {("0AUDLJ08S_00601", "심폐지구력"), ("0AUDLJ08S_00602", "근력")}
 
 
 # ── 받기: 키가 로그 · 오류 문구에 남지 않는다 ────────────────────────────────

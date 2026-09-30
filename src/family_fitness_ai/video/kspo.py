@@ -19,6 +19,9 @@ API 는 영상을 여섯 갈래로 나눠 주고, 한 영상은 한 갈래에만
 메타데이터는 API 에서 온다
     체력요인·추천 체력수준  가이드는 제 칸(ftns_fctr_nm · ftns_lvl_nm)에 있다. 처방동영상은
                             그 칸이 없어, 같은 운동명의 가이드(없으면 루틴)가 준 값을 쓴다.
+                            설명에 「유산소운동에 해당하는」처럼 갈래가 적혀 있으면 요인은
+                            그 갈래가 먼저다(KINDS) — 「운동프로그램」 묶음은 요인 칸이
+                            모두 「유연성」으로 잘못 온다.
     단계                    짧은 영상 조회에는 단계 칸이 없다. 같은 운동명이 표준운동·루틴에서
                             받은 단계(「준비 운동」…)를 쓰고, 없으면 체력요인이 유연성이면
                             준비·정리, 아니면 본운동. 요인도 없으면 이름으로 본다.
@@ -94,6 +97,20 @@ FACTORS = {
     "협응력": ("협응력",),
     "평형성": ("평형성",),
 }
+#: 운동처방가이드 설명 「… 중, 가슴운동에 해당하는 …」의 갈래 → 우리 요인. 「운동프로그램」
+#: 「체력 증진 운동프로그램」 묶음은 API 가 체력요인을 모두 「유연성」으로 적어, 빠르게
+#: 걷기가 준비·정리 유연성으로, 팔굽혀펴기가 유연성으로 실렸다. 갈래가 적혀 있으면 API
+#: 체력요인보다 먼저 쓴다. 받아 둔 응답에 나온 갈래뿐이다 — 없는 갈래는 API 요인을 쓴다.
+KINDS = {
+    "유산소운동": ("심폐지구력",),
+    "가슴운동": ("근력",),
+    "등운동": ("근력",),
+    "몸통운동": ("근력",),
+    "팔/어깨운동": ("근력",),
+    "하체운동": ("근력",),
+    "스트레칭": ("유연성",),
+}
+_KIND = re.compile(r"중,\s*(\S+?)에 해당하는")
 #: 제목·설명에 이 말이 들면 질환·부상용이다 — 진료 쪽이라 쓰지 않는다. 질문 가리기
 #: (rag.medical)가 「염좌」만 잡아, 가이드에 섞인 오십견·경부통·요통 영상을 여기서 더 잡는다.
 CONDITIONS = ("예방", "요통", "경부통", "오십견", "염좌", "부동증후군", "질환", "재활", "통증")
@@ -140,6 +157,12 @@ def api_phase(text: str) -> str:
 
 def _row_phase(row: dict[str, Any]) -> str:
     return next((p for f in PHASE_FIELDS if (p := api_phase(row.get(f) or ""))), "")
+
+
+def kind_factors(description: str) -> tuple[str, ...]:
+    """설명이 적은 갈래의 요인. 갈래가 없거나 모르는 갈래면 빈 채다."""
+    kind = _KIND.search(description or "")
+    return KINDS.get(kind[1], ()) if kind else ()
 
 
 def rule_phases(name: str, factors: tuple[str, ...]) -> tuple[str, ...]:
@@ -298,7 +321,9 @@ def _video(
         return []
 
     got = borrowed.get(join_key(name)) or borrowed.get(join_key(_most(scenes, "trng_nm")))
-    factors = FACTORS.get(_most(scenes, "ftns_fctr_nm") or (got.factor if got else ""), ())
+    factors = kind_factors(_most(scenes, "vdo_desc")) or FACTORS.get(
+        _most(scenes, "ftns_fctr_nm") or (got.factor if got else ""), ()
+    )
     lo, hi = levels(_most(scenes, "ftns_lvl_nm") or (got.level if got else ""))
     phases = (got.phases if got else ()) or rule_phases(name, factors)
     linked = exercise_name(name)
