@@ -219,6 +219,25 @@ def test_the_table_has_the_clip_and_label_columns():
         assert row["is_exercise"] == "True"
 
 
+def test_the_citation_label_drops_the_step_number_like_the_name():
+    """영상 제목 「등/어깨 뒤쪽 스트레칭-1」의 「-1」은 단계 번호다. 편성 이름처럼 인용
+    label 에서도 뗀다 — 「국민체력100 운동처방가이드 · 등/어깨 뒤쪽 스트레칭-1」로 나갔다."""
+    scene = dict(_case_row("가이드 · 요인·수준이 제 칸에"))
+    scene.update(file_nm="X_step.mp4", vdo_ttl_nm="등/어깨 뒤쪽 스트레칭-1")
+    rows = kspo.build({kspo.GUIDE: [scene]}, {"X_step.mp4": True}, borrowed={})
+    assert rows
+    label = "국민체력100 운동처방가이드 · 등/어깨 뒤쪽 스트레칭"
+    assert {r["citation_label"] for r in rows} == {label}
+
+
+@needs_release
+@has_table
+def test_no_citation_label_in_the_table_ends_with_a_step_number():
+    rows = list(csv.DictReader((settings().release_dir / kspo.OUT).open(encoding="utf-8")))
+    assert rows
+    assert not [r["citation_label"] for r in rows if kspo._STEP.search(r["citation_label"])]
+
+
 @needs_index
 def test_the_table_does_not_follow_row_order():
     """두 번 돌린 표가 같아야 한다 — 받은 차례가 바뀌어도."""

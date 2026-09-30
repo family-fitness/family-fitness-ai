@@ -374,7 +374,7 @@ def _video(
         "reps": _most(scenes, "rptt_tcnt_nm"),
         "hold": _most(scenes, "trng_hr_nm"),
         "url": VIDEO + file_nm,
-        "citation_label": f"국민체력100 {kind} · {title or name}",
+        "citation_label": f"국민체력100 {kind} · {display(title) or name}",
     }
     rows = []
     for age in ages:
