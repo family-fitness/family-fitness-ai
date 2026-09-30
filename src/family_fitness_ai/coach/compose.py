@@ -304,15 +304,17 @@ def _brief(read: Read) -> dict[str, Any]:
     }
 
 
-def _rule_copy(read: Read, constraints: Constraints, slot: Slot) -> dict[str, str]:
+def _rule_copy(read: Read, constraints: Constraints, slot: Slot, weeks: int) -> dict[str, str]:
     child = words.FOCUS_COPY.get(read.factor, "이번 주도 몸을 움직여 볼까요")
     if slot.weekly:
         child = "이번 주에 한 번은 다 같이 길게 움직여 볼까요"
-    where = (
-        f"주에 한 번 {slot.minutes}분"
-        if slot.weekly
-        else f"주 {constraints.days_per_week}회 {slot.minutes}분"
-    )
+        where = f"주에 한 번 {slot.minutes}분"
+    elif constraints.days_per_week == 1 and weeks == 1:
+        # 한 주에 한 번, 한 주만 — 편성이 하루뿐이다(BE 의 하루 편성). 「주 1회」라고
+        # 쓰면 한 주 계획으로 읽힌다. 날짜가 오늘이 아닐 수 있어 「오늘」로 쓰지 않는다.
+        where = f"하루 {slot.minutes}분"
+    else:
+        where = f"주 {constraints.days_per_week}회 {slot.minutes}분"
     if read.factor and read.band:
         parent = f"{words.factor_copy(read.factor, read.band)}. {where}이면 충분합니다"
     elif read.focused:
@@ -506,7 +508,7 @@ def _by_llm(
             {key: day_plan.get(key) for key in ("title", "child", "parent", "reason")},
             {
                 "title": _rule_title(read, slot, start_date),
-                **_rule_copy(read, constraints, slot),
+                **_rule_copy(read, constraints, slot, weeks),
                 "reason": _rule_reason(evidence_base),
             },
             dropped,
@@ -645,7 +647,7 @@ def _by_rule(
                 slot,
                 sessions,
                 _rule_title(read, slot, start_date),
-                _rule_copy(read, constraints, slot),
+                _rule_copy(read, constraints, slot, weeks),
                 reason,
                 start_date,
                 weeks,
