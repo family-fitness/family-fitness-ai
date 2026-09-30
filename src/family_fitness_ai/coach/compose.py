@@ -345,7 +345,7 @@ def _rule_copy(read: Read, constraints: Constraints, slot: Slot, weeks: int) -> 
     elif read.factor and read.band:
         parent = f"{with_topic(read.factor)} {words.GROW_NOW}입니다. {where}이면 충분합니다"
     else:
-        parent = f"{where}으로 짰습니다. 측정을 하면 요인을 짚어 드릴 수 있습니다"
+        parent = f"{where}으로 짰습니다. 체력을 재면 무엇을 키우면 좋을지 알려 드릴게요"
     return {"child": child, "parent": parent}
 
 

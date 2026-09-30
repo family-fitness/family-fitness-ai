@@ -540,7 +540,7 @@ def pool(
         picked += [clip for clip in _distinct(other) if _key(clip) not in taken][:room]
         if room and other:
             notice = (
-                f"{age_group} 라벨이 붙은 영상이 적어 다른 연령대 영상도 함께 골랐습니다. "
+                f"{age_group}에 맞춘 영상이 적어 다른 연령대 영상도 함께 골랐습니다. "
                 "그대로 쓸지는 보고 정해 주세요."
             )
     return picked, notice

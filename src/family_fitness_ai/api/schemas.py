@@ -115,7 +115,7 @@ class ConstraintsIn(BaseModel):
         if not value:
             return None
         if value not in FACTORS:
-            raise ValueError(f"{', '.join(FACTORS)} 중 하나여야 합니다")
+            raise ValueError(f"{', '.join(FACTORS)} 가운데 하나를 골라 주세요")
         return value
 
 

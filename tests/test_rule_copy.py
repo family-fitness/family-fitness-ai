@@ -37,6 +37,15 @@ def test_one_day_plan_focused_and_unmeasured_also_say_one_day() -> None:
     assert "하루 20분" in unmeasured["parent"] and "주 1회" not in unmeasured["parent"]
 
 
+def test_unmeasured_plan_does_not_say_factor_to_the_guardian() -> None:
+    """「요인」 은 코드 쪽 말이다. 보호자에게는 무엇을 키우면 좋을지로 말한다."""
+    unmeasured = compose._rule_copy(
+        _read(factor="", band=""), compose.Constraints(days_per_week=1), _day(), 1
+    )
+    assert "요인" not in unmeasured["parent"]
+    assert unmeasured["parent"].endswith("무엇을 키우면 좋을지 알려 드릴게요")
+
+
 def test_weekly_rhythm_still_says_times_per_week() -> None:
     three = compose._rule_copy(_read(), compose.Constraints(days_per_week=3), _day(15), 1)
     once_for_two_weeks = compose._rule_copy(
