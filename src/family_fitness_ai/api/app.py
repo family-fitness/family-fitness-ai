@@ -6,6 +6,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import logging
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
@@ -25,6 +26,7 @@ from family_fitness_ai.api.schemas import (
 from family_fitness_ai.coach import answer as coach_answer
 from family_fitness_ai.coach.compose import Constraints, RunProfile
 from family_fitness_ai.coach.runs import store
+from family_fitness_ai.common import release
 from family_fitness_ai.common.errors import ApiError, temporarily_unavailable
 from family_fitness_ai.common.settings import settings
 from family_fitness_ai.rag import embed
@@ -37,7 +39,7 @@ log = logging.getLogger(__name__)
 
 @asynccontextmanager
 async def lifespan(_: FastAPI) -> AsyncIterator[None]:
-    """인덱스가 없으면 뜨지 않는다.
+    """인덱스나 release 표가 없으면 뜨지 않는다.
 
     없어도 서버는 떠서 평가·궤적만 답하고 코치 쪽은 요청이 올 때마다 깨진다.
     그러면 배포가 성공한 것처럼 보이고, 아무도 안 보는 새 절반이 죽어 있다.
@@ -49,17 +51,29 @@ async def lifespan(_: FastAPI) -> AsyncIterator[None]:
             f"코퍼스 인덱스가 없다: {settings().index_dir} ({', '.join(absent)} 없음). "
             "data/index 를 배포에 실었는지 보라"
         )
-    # 임베딩도 같은 까닭으로 띄울 때 본다. 모델을 올리지는 않는다 — 있는지만 본다.
+    # release 표도 같다. 없으면 평가가 까닭 없는 503 을 내고, 공단 영상 표 하나만 빠져도
+    # 편성 후보가 소리 없이 줄어든다.
+    absent = release.missing_files()
+    if absent:
+        raise RuntimeError(
+            f"release 표가 없다: {settings().release_dir} ({', '.join(absent)} 없음). "
+            "data/release 를 배포에 실었는지 보라"
+        )
+    # 임베딩도 같은 까닭으로 띄울 때 본다. 여기서는 있는지만 보고, 올리는 것은 아래다.
     reason = embed.missing()
     if reason:
         raise RuntimeError(
             f"임베딩을 이 프로세스에서 돌릴 수 없다: {reason}. "
             "밖에 띄운 서버를 쓰려면 EMBEDDING_BACKEND=http"
         )
+    # 모델을 요청을 받기 전에 올린다. 첫 검색이 모델을 기다리느라 BE 의 읽기 한도를
+    # 넘었다. 스레드에서 올려 이벤트 루프를 붙잡지 않는다.
+    if settings().embedding_warmup:
+        await asyncio.to_thread(embed.warm_up)
     yield
 
 
-app = FastAPI(title="우리가족 체력키움 · AI", version="0.1.0", lifespan=lifespan)
+app = FastAPI(title="우리가족 체력키움 AI", version="0.1.0", lifespan=lifespan)
 v1 = APIRouter(prefix="/v1")
 
 
@@ -176,6 +190,9 @@ def post_run(body: RunIn) -> dict[str, object]:
         quiet=body.constraints.quiet,
         small_space=body.constraints.small_space,
         no_props=body.constraints.no_props,
+        focus_factor=body.constraints.focus_factor,
+        with_companion=body.constraints.with_companion,
+        recent_video_ids=tuple(body.constraints.recent_video_ids),
     )
     run = store.start(profiles, body.period.start_date, body.period.weeks, constraints)
     return {"run_id": run.run_id, "status": run.status, "poll_after_ms": 1500}

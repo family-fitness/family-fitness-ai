@@ -15,6 +15,7 @@ import re
 from dataclasses import dataclass
 from typing import Any
 
+from family_fitness_ai.common.copy import plain
 from family_fitness_ai.rag.index import Chunk
 from family_fitness_ai.rag.search import search
 from family_fitness_ai.video import catalog
@@ -96,7 +97,8 @@ def search_videos(
     k: int = 5,
 ) -> dict[str, object]:
     query = " ".join([*exercise_names, *fitness_factors, age_group, "운동 영상"])
-    result = search(query, k=k, sources=("video",), age_group=age_group)
+    # 어르신은 성인 영상도 또래로 친다(catalog.ages_for).
+    result = search(query, k=k, sources=("video",), age_group=catalog.ages_for(age_group))
 
     ends = {(c.video_id, c.start_sec): c.end_sec for c in catalog.clips() if c.source == "youtube"}
     hits: list[dict[str, Any]] = []
@@ -114,7 +116,7 @@ def search_videos(
                 "score": hit.score,
                 "matched_exercise_names": matched,
                 "citation": {
-                    "label": hit.chunk.citation_label,
+                    "label": hit.chunk.label(),
                     "chunk_id": hit.chunk.chunk_id,
                 },
             }
@@ -143,8 +145,9 @@ def kspo_hits(
     """공단 클립 중 맞는 것. 영상마다 하나만 — 표는 한 영상을 요인·단계마다 한 줄씩
     두어서, 그대로 두면 같은 영상이 결과에 여러 번 나온다."""
     best: dict[str, tuple[tuple[float, int, int], dict[str, Any]]] = {}
+    ages = catalog.ages_for(age_group)
     for clip in catalog.clips():
-        if clip.source != "kspo" or clip.age_group != age_group:
+        if clip.source != "kspo" or clip.age_group not in ages:
             continue
         names = {_key(clip.title), _key(clip.name)}
         matched = [
@@ -172,7 +175,7 @@ def kspo_hits(
                 "score": score,
                 "matched_exercise_names": matched,
                 "citation": {
-                    "label": chunk.citation_label if chunk else clip.citation_label,
+                    "label": plain(chunk.citation_label if chunk else clip.citation_label),
                     "chunk_id": chunk.chunk_id if chunk else f"kspo:{clip.video_id}",
                 },
             },

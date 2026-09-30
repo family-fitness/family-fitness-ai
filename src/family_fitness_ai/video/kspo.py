@@ -19,9 +19,13 @@ API 는 영상을 여섯 갈래로 나눠 주고, 한 영상은 한 갈래에만
 메타데이터는 API 에서 온다
     체력요인·추천 체력수준  가이드는 제 칸(ftns_fctr_nm · ftns_lvl_nm)에 있다. 처방동영상은
                             그 칸이 없어, 같은 운동명의 가이드(없으면 루틴)가 준 값을 쓴다.
+                            설명에 「유산소운동에 해당하는」처럼 갈래가 적혀 있으면 요인은
+                            그 갈래가 먼저다(KINDS) — 「운동프로그램」 묶음은 요인 칸이
+                            모두 「유연성」으로 잘못 온다.
     단계                    짧은 영상 조회에는 단계 칸이 없다. 같은 운동명이 표준운동·루틴에서
-                            받은 단계(「준비 운동」…)를 쓰고, 없으면 체력요인이 유연성이면
-                            준비·정리, 아니면 본운동. 요인도 없으면 이름으로 본다.
+                            받은 단계(「준비 운동」…)를 쓴다. 질환·예방 프로그램 것은 빼고
+                            본다. 없으면 체력요인이 유연성이면 준비·정리, 아니면 본운동.
+                            요인도 없으면 이름으로 본다.
     도구·장소·인원·세트     영상의 장면 줄에 적힌 값 중 가장 많은 것.
     조용한지               API 에 없다. 유튜브 클립과 같은 규칙(이름)으로 본다.
 
@@ -39,6 +43,7 @@ import argparse
 import collections
 import csv
 import json
+import logging
 import math
 import re
 import time
@@ -93,6 +98,20 @@ FACTORS = {
     "협응력": ("협응력",),
     "평형성": ("평형성",),
 }
+#: 운동처방가이드 설명 「… 중, 가슴운동에 해당하는 …」의 갈래 → 우리 요인. 「운동프로그램」
+#: 「체력 증진 운동프로그램」 묶음은 API 가 체력요인을 모두 「유연성」으로 적어, 빠르게
+#: 걷기가 준비·정리 유연성으로, 팔굽혀펴기가 유연성으로 실렸다. 갈래가 적혀 있으면 API
+#: 체력요인보다 먼저 쓴다. 받아 둔 응답에 나온 갈래뿐이다 — 없는 갈래는 API 요인을 쓴다.
+KINDS = {
+    "유산소운동": ("심폐지구력",),
+    "가슴운동": ("근력",),
+    "등운동": ("근력",),
+    "몸통운동": ("근력",),
+    "팔/어깨운동": ("근력",),
+    "하체운동": ("근력",),
+    "스트레칭": ("유연성",),
+}
+_KIND = re.compile(r"중,\s*(\S+?)에 해당하는")
 #: 제목·설명에 이 말이 들면 질환·부상용이다 — 진료 쪽이라 쓰지 않는다. 질문 가리기
 #: (rag.medical)가 「염좌」만 잡아, 가이드에 섞인 오십견·경부통·요통 영상을 여기서 더 잡는다.
 CONDITIONS = ("예방", "요통", "경부통", "오십견", "염좌", "부동증후군", "질환", "재활", "통증")
@@ -139,6 +158,17 @@ def api_phase(text: str) -> str:
 
 def _row_phase(row: dict[str, Any]) -> str:
     return next((p for f in PHASE_FIELDS if (p := api_phase(row.get(f) or ""))), "")
+
+
+def kind_factors(description: str) -> tuple[str, ...]:
+    """설명이 적은 갈래의 요인. 갈래가 없거나 모르는 갈래면 빈 채다."""
+    kind = _KIND.search(description or "")
+    return KINDS.get(kind[1], ()) if kind else ()
+
+
+def for_conditions(about: str) -> bool:
+    """제목·설명이 질환·부상용인가. 진료 쪽이라 클립으로 쓰지 않고 단계도 빌리지 않는다."""
+    return is_medical(about) or any(word in about for word in CONDITIONS)
 
 
 def rule_phases(name: str, factors: tuple[str, ...]) -> tuple[str, ...]:
@@ -193,7 +223,7 @@ def _most(rows: list[dict[str, Any]], key: str) -> str:
 
 @dataclass(frozen=True)
 class Borrowed:
-    """다른 조회가 같은 운동명에 붙인 값. 공단 원문 그대로 둔다."""
+    """다른 조회가 같은 운동명에 붙인 값. 공단 원문 그대로 둔다(요인만 설명의 갈래가 먼저)."""
 
     factor: str
     level: str
@@ -205,7 +235,19 @@ def borrowed_from(rows_by_op: dict[str, list[dict[str, Any]]]) -> dict[str, Borr
 
     한 영상은 한 조회에만 들어서 영상으로는 이을 수 없다. 운동명으로 잇는다.
     요인은 가이드가 먼저고 없으면 루틴, 수준은 가이드, 단계는 표준운동·루틴이다.
+    가이드 설명에 갈래(KINDS)가 적혀 있으면 요인은 원문 대신 그 갈래의 요인이다.
+    질환·예방 프로그램의 단계는 빌리지 않는다 — 클립으로 쓰지 않는 영상이고, 「우울증
+    예방 운동프로그램(댄스운동 편)」 하나만 팔굽혀펴기를 준비운동에 둔다.
     """
+    videos: dict[str, list[dict[str, Any]]] = collections.defaultdict(list)
+    for rows in rows_by_op.values():
+        for row in rows:
+            videos[row.get("file_nm") or ""].append(row)
+    sick = {
+        file_nm
+        for file_nm, scenes in videos.items()
+        if for_conditions(" ".join((_most(scenes, "vdo_ttl_nm"), _most(scenes, "vdo_desc"))))
+    }
     guide_factor: dict[str, collections.Counter[str]] = collections.defaultdict(collections.Counter)
     routine_factor: dict[str, collections.Counter[str]] = collections.defaultdict(
         collections.Counter
@@ -218,13 +260,17 @@ def borrowed_from(rows_by_op: dict[str, list[dict[str, Any]]]) -> dict[str, Borr
             if not key:
                 continue
             factor = (row.get("ftns_fctr_nm") or "").strip()
+            if op == GUIDE and (kind := kind_factors(row.get("vdo_desc") or "")):
+                # 가이드 설명에 갈래가 있으면 _video 와 같이 그쪽이 먼저다. 그래야 빌려
+                # 가는 처방동영상(빠르게 걷기 00182)이 가이드(00601)와 어긋나지 않는다.
+                factor = kind[0]
             if factor and op == GUIDE:
                 guide_factor[key][factor] += 1
             elif factor and op == ROUTINE:
                 routine_factor[key][factor] += 1
             if op == GUIDE and (row.get("ftns_lvl_nm") or "").strip():
                 level[key][row["ftns_lvl_nm"].strip()] += 1
-            if phase := _row_phase(row):
+            if (phase := _row_phase(row)) and row.get("file_nm") not in sick:
                 phases[key].add(phase)
 
     def top(counts: collections.Counter[str] | None) -> str:
@@ -286,8 +332,7 @@ def _video(
         or not ages
         or not 0 < seconds < MAX_SEC
         or re.search("루[틴팀]", f"{title} {name}")  # 루틴 프로그램 — 여러 동작을 묶었다
-        or is_medical(about)
-        or any(word in about for word in CONDITIONS)
+        or for_conditions(about)
         or "짝" in about  # 둘이 해야 한다. 처방동영상에는 인원 칸이 없다
         or _most(scenes, "nope_nm") not in ("", "1인 이상")
         or place in AWAY
@@ -297,7 +342,9 @@ def _video(
         return []
 
     got = borrowed.get(join_key(name)) or borrowed.get(join_key(_most(scenes, "trng_nm")))
-    factors = FACTORS.get(_most(scenes, "ftns_fctr_nm") or (got.factor if got else ""), ())
+    factors = kind_factors(_most(scenes, "vdo_desc")) or FACTORS.get(
+        _most(scenes, "ftns_fctr_nm") or (got.factor if got else ""), ()
+    )
     lo, hi = levels(_most(scenes, "ftns_lvl_nm") or (got.level if got else ""))
     phases = (got.phases if got else ()) or rule_phases(name, factors)
     linked = exercise_name(name)
@@ -327,7 +374,7 @@ def _video(
         "reps": _most(scenes, "rptt_tcnt_nm"),
         "hold": _most(scenes, "trng_hr_nm"),
         "url": VIDEO + file_nm,
-        "citation_label": f"국민체력100 {kind} · {title or name}",
+        "citation_label": f"국민체력100 {kind} · {display(title) or name}",
     }
     rows = []
     for age in ages:
@@ -342,16 +389,47 @@ def _video(
 
 
 def fetch(op: str, key: str) -> list[dict[str, Any]]:
-    """조회 하나를 끝까지 받는다. 한 번에 천 줄씩."""
+    """조회 하나를 끝까지 받는다. 한 번에 천 줄씩.
+
+    키는 serviceKey 로 요청 주소에 들어간다. httpx 는 요청마다 INFO 로 주소를 통째로
+    남기고, raise_for_status 의 오류 문구에도 주소를 적는다. 로깅이 켜진 곳에서 받으면
+    키가 로그에 남으므로, 받는 동안 httpx 로그를 WARNING 으로 낮추고 오류는 주소 없이
+    다시 낸다.
+    """
+    quiet = logging.getLogger("httpx")
+    before = quiet.level
+    quiet.setLevel(logging.WARNING)
+    try:
+        return _fetch(op, key)
+    finally:
+        quiet.setLevel(before)
+
+
+def _fetch(op: str, key: str) -> list[dict[str, Any]]:
     rows: list[dict[str, Any]] = []
     page, total = 1, None
     while total is None or len(rows) < total:
-        response = httpx.get(
-            API + op,
-            params={"serviceKey": key, "pageNo": page, "numOfRows": 1000, "resultType": "json"},
-            timeout=60,
-        )
-        response.raise_for_status()
+        try:
+            response = httpx.get(
+                API + op,
+                params={
+                    "serviceKey": key,
+                    "pageNo": page,
+                    "numOfRows": 1000,
+                    "resultType": "json",
+                },
+                timeout=60,
+            )
+            response.raise_for_status()
+        except httpx.HTTPStatusError as error:
+            # 원래 오류는 주소(키 포함)를 문구에 담는다. 이어 붙이지 않는다.
+            raise RuntimeError(
+                f"{OPS.get(op, op)} {page}쪽 받기 실패 — HTTP {error.response.status_code}"
+            ) from None
+        except httpx.HTTPError as error:
+            raise RuntimeError(
+                f"{OPS.get(op, op)} {page}쪽 받기 실패 — {type(error).__name__}"
+            ) from None
         body = response.json()["response"]["body"]
         total = int(body["totalCount"])
         items = body["items"]

@@ -1,6 +1,7 @@
 """클립 이름에 뜻을 붙인다.
 
     python -m family_fitness_ai.video.labels [--llm]
+    python -m family_fitness_ai.video.labels --fill-factors   (빈 요인만 공단 표로 채운다)
 
 영상 속 이름과 처방 어휘는 같은 말을 쓰지 않는다. 유아기 영상은 「공을 던져
 붙여요」처럼 놀이 이름으로 부르고, 처방문은 「팔벌려뛰기」처럼 동작 이름으로
@@ -30,6 +31,7 @@ from __future__ import annotations
 import argparse
 import csv
 import json
+from collections.abc import Collection, Mapping
 from dataclasses import asdict, dataclass
 from pathlib import Path
 
@@ -128,6 +130,62 @@ def _clip_names(release_dir: Path) -> dict[str, tuple[str, str]]:
             if before is None or (not before[0] and phase):
                 out[name] = (phase, age_group)
     return out
+
+
+def kspo_factors(path: Path) -> dict[str, frozenset[str]]:
+    """공단 표(kspo_videos.csv)의 동작 이름 → 그 동작에 붙은 요인들.
+
+    공단 영상 한 편에 요인이 여럿이면 표에 줄이 여럿이다. 운동이 아닌 줄과 빈 요인은 뺀다.
+    """
+    found: dict[str, set[str]] = {}
+    if not path.exists():
+        return {}
+    with path.open(encoding="utf-8", newline="") as fh:
+        for row in csv.DictReader(fh):
+            if row["is_exercise"] == "True" and row["exercise_name"] and row["fitness_factor"]:
+                found.setdefault(row["exercise_name"], set()).add(row["fitness_factor"])
+    return {name: frozenset(factors) for name, factors in found.items()}
+
+
+def factor_from_kspo(
+    exercise_name: str, fitness_factor: str, known: Mapping[str, Collection[str]]
+) -> str:
+    """빈 요인을 같은 이름의 공단 클립 요인으로 채운다.
+
+    exact 와 embed 는 이름만 잇고 요인은 비워 둔다. 그러면 요인으로 클립을 고를 때
+    (catalog 의 편성과 영상 찾기) 그 줄은 후보가 되지 못한다. 공단 영상은 한 편이 한 동작이고
+    요인을 API 가 준다. 그 동작의 요인이 하나로 정해졌을 때만 빌려 온다. 둘 이상으로
+    갈리면 어느 쪽인지 알 수 없어 비워 둔다. 이미 적힌 요인은 건드리지 않는다.
+    """
+    if fitness_factor or not exercise_name:
+        return fitness_factor
+    factors = known.get(exercise_name, ())
+    return next(iter(factors)) if len(factors) == 1 else ""
+
+
+def fill_factors(release_dir: Path) -> list[str]:
+    """clip_labels.csv 의 빈 요인만 채워 다시 쓴다. 채운 name_on_video 목록을 돌려준다.
+
+    LLM 도 임베딩도 부르지 않는다. 줄 순서와 다른 칸은 읽은 글자 그대로 둔다.
+    """
+    path = release_dir / "clip_labels.csv"
+    known = kspo_factors(release_dir / "kspo_videos.csv")
+    with path.open(encoding="utf-8", newline="") as fh:
+        reader = csv.DictReader(fh)
+        fields = list(reader.fieldnames or ())
+        rows = list(reader)
+    filled: list[str] = []
+    for row in rows:
+        factor = factor_from_kspo(row["exercise_name"], row["fitness_factor"], known)
+        if factor != row["fitness_factor"]:
+            row["fitness_factor"] = factor
+            filled.append(row["name_on_video"])
+    if filled:
+        with path.open("w", newline="", encoding="utf-8") as fh:
+            writer = csv.DictWriter(fh, lineterminator="\n", fieldnames=fields)
+            writer.writeheader()
+            writer.writerows(rows)
+    return filled
 
 
 _SYSTEM = """너는 국민체력100 운동영상의 화면 이름을 처방 어휘에 잇는 일을 한다.
@@ -353,6 +411,10 @@ def build(
                 )
             )
 
+    known = kspo_factors(release_dir / "kspo_videos.csv")
+    for label in labels:
+        label.fitness_factor = factor_from_kspo(label.exercise_name, label.fitness_factor, known)
+
     labels.sort(key=lambda label: label.name_on_video)
     with path.open("w", newline="", encoding="utf-8") as fh:
         writer = csv.DictWriter(fh, lineterminator="\n", fieldnames=list(asdict(labels[0]).keys()))
@@ -369,7 +431,17 @@ def main() -> None:
     parser.add_argument("--backend", default="", help="claude | gemini (기본은 .env)")
     parser.add_argument("--model", default="")
     parser.add_argument("--refresh", action="store_true", help="붙여 둔 이름까지 다시 매긴다")
+    parser.add_argument(
+        "--fill-factors",
+        action="store_true",
+        help="빈 요인만 공단 표의 같은 동작 요인으로 채운다(LLM, 임베딩을 부르지 않는다)",
+    )
     args = parser.parse_args()
+
+    if args.fill_factors:
+        filled = fill_factors(Path(args.release_dir))
+        print(f"요인을 채운 줄 {len(filled)}개: {', '.join(filled)}")
+        return
 
     labels = build(
         Path(args.release_dir),

@@ -46,6 +46,6 @@ def test_copy_never_uses_the_banned_words():
 def test_trajectory_is_a_group_distribution_not_a_forecast():
     result = trajectory(CHILD, "028", 3)
     assert result["basis"] == "cross_sectional_group_distribution"
-    assert "개인의 변화를 나타내지 않습니다" in result["notice"]
+    assert "이렇게 바뀐다는 뜻은 아닙니다" in result["notice"]
     ages = [band["age"] for band in result["bands"]]
     assert ages == sorted(ages)

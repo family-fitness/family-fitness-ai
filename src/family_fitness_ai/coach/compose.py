@@ -24,12 +24,14 @@ AI 는 DB 에 쓰지 않는다. 여기서 나오는 것은 **제안**이고, 저
 from __future__ import annotations
 
 import re
+from collections.abc import Collection
 from dataclasses import dataclass, field
 from datetime import date, timedelta
 from typing import Any
 
 from family_fitness_ai.coach import llm as coach_llm
 from family_fitness_ai.common import copy as words
+from family_fitness_ai.common.copy import with_topic
 from family_fitness_ai.common.items import age_group_of
 from family_fitness_ai.rag.index import Chunk
 from family_fitness_ai.rag.search import search
@@ -112,6 +114,18 @@ class Constraints:
     quiet: bool = False
     small_space: bool = False
     no_props: bool = False
+    #: 보호자가 키워 주고 싶은 역량. 있으면 측정으로 고른 가장 낮은 요인보다 앞선다.
+    focus_factor: str | None = None
+    #: 보호자도 같이 한다. 참여자는 그대로고, LLM 코치가 문구를 쓸 때만 본다.
+    with_companion: bool = False
+    #: 그 사람이 최근 14일 동안 미션으로 받은 영상 id(유튜브 id 또는 공단 파일 이름),
+    #: 최근 것부터. 후보를 고를 때 뒤로 미룬다 — 다른 후보가 모자랄 때만 다시 쓴다.
+    #: 다시 쓸 때는 오래전에 받은 것부터 쓴다. 그래서 차례를 버리지 않는다.
+    recent_video_ids: tuple[str, ...] = ()
+
+    @property
+    def recent(self) -> tuple[str, ...]:
+        return self.recent_video_ids
 
     def conditions(self) -> catalog.Conditions:
         return catalog.Conditions(
@@ -131,7 +145,8 @@ class Step:
             "seq": self.seq,
             "name": self.name,
             "status": self.status,
-            "summary": self.summary,
+            # 걸어 온 오류 문구(ApiError.message)도 여기로 온다. 화면에 나가니 한 번 더 바꾼다.
+            "summary": words.plain(self.summary),
         }
 
 
@@ -145,15 +160,27 @@ class Plan:
 
 @dataclass
 class Citations:
-    """인용 번호를 매긴다. 같은 청크는 한 번만 센다."""
+    """인용 번호를 매긴다. 같은 청크는 한 번만 센다.
+
+    처방은 이름이 같으면 한 번호로 합친다. 인용 이름에서 요인별 등급을 걷어 내
+    (rag.index) 같은 나이 · 요인의 2등급 칸과 3등급 칸이 같은 이름이 되었다 —
+    근거 목록에 같은 이름이 둘 나오지 않게 한다.
+    """
 
     order: list[Chunk] = field(default_factory=list)
     index: dict[str, int] = field(default_factory=dict)
+    by_label: dict[str, int] = field(default_factory=dict)
 
     def add(self, chunk: Chunk) -> int:
-        if chunk.chunk_id not in self.index:
-            self.order.append(chunk)
-            self.index[chunk.chunk_id] = len(self.order)
+        if chunk.chunk_id in self.index:
+            return self.index[chunk.chunk_id]
+        if chunk.source == "prescription" and chunk.citation_label in self.by_label:
+            self.index[chunk.chunk_id] = self.by_label[chunk.citation_label]
+            return self.index[chunk.chunk_id]
+        self.order.append(chunk)
+        self.index[chunk.chunk_id] = len(self.order)
+        if chunk.source == "prescription":
+            self.by_label[chunk.citation_label] = len(self.order)
         return self.index[chunk.chunk_id]
 
     def dump(self) -> list[dict[str, Any]]:
@@ -174,12 +201,26 @@ class Read:
     rows: list[dict[str, Any]]
     chunks: list[Chunk]
     notices: list[str]
+    #: 대상 요인을 보호자가 골랐나. False 면 측정으로 고른 가장 낮은 요인이다.
+    focused: bool = False
 
 
-def target_factor(profile: RunProfile) -> tuple[str, str, int | None, list[dict[str, Any]]]:
-    """가장 낮은 요인과 그 band·백분위. 측정이 없으면 빈 채로 돌아온다."""
+def target_factor(
+    profile: RunProfile, focus: str | None = None
+) -> tuple[str, str, int | None, list[dict[str, Any]]]:
+    """대상 요인과 그 band·백분위.
+
+    보호자가 키워 주고 싶은 역량(focus)이 있으면 그것이 대상이다. 그 요인을 쟀으면
+    band·백분위도 함께 내고, 안 쟀으면 빈 채로 낸다. 없으면 측정에서 가장 낮은
+    요인을 고르고, 측정도 없으면 전부 빈 채로 돌아온다.
+    """
     rows, _ = factor_rows(profile.profile())
     graded = [row for row in rows if row["percentile"] is not None]
+    if focus:
+        mine = next((row for row in graded if row["factor"] == focus), None)
+        if mine is None:
+            return focus, "", None, rows
+        return focus, str(mine["band"]), int(mine["percentile"]), rows
     if not graded:
         return "", "", None, rows
     low = min(graded, key=lambda row: int(row["percentile"]))
@@ -212,6 +253,7 @@ def _prescriptions(profile: RunProfile, factor: str, band: str) -> tuple[list[Ch
 
     same_sex = lambda f: f["sex"] == profile.sex  # noqa: E731
     same_factor = lambda f: not factor or f["factor"] == factor  # noqa: E731
+    wanted_factor = factor or "그 요인"
 
     ladder = (
         (
@@ -219,18 +261,30 @@ def _prescriptions(profile: RunProfile, factor: str, band: str) -> tuple[list[Ch
             lambda f: int(f["age"]) == profile.age and same_sex(f) and same_factor(f),
         ),
         (
-            f"만 {profile.age}세 처방 자료가 없어 같은 {profile.age_group} 자료를 썼습니다.",
+            f"만 {profile.age}세 처방 자료가 없어 같은 {profile.age_group} 자료로 짰어요.",
             lambda f: f["age_group"] == profile.age_group and same_sex(f) and same_factor(f),
         ),
         (
-            f"{profile.age_group} 자료가 없어 같은 성별의 다른 연령대 자료를 썼습니다.",
+            f"{profile.age_group} 자료가 없어 같은 성별의 다른 연령대 자료로 짰어요.",
             lambda f: same_sex(f) and same_factor(f),
         ),
+        # 요인을 먼저 넓히고 성별은 끝까지 지킨다. 여자아이 처방이 있는데 남자아이
+        # 처방을 근거로 들지 않는다.
         (
-            "요인을 좁히지 않고 그 연령대에 흔한 운동으로 골랐습니다.",
+            f"{wanted_factor} 처방 자료가 없어 같은 나이 처방 가운데 흔한 운동으로 골랐어요.",
+            lambda f: int(f["age"]) == profile.age and same_sex(f),
+        ),
+        (
+            f"{wanted_factor} 처방 자료가 없어 같은 {profile.age_group} 처방 가운데 "
+            "흔한 운동으로 골랐어요.",
+            lambda f: f["age_group"] == profile.age_group and same_sex(f),
+        ),
+        (
+            "같은 성별 처방 자료가 없어 요인과 성별을 좁히지 않고 "
+            "그 연령대에 흔한 운동으로 골랐어요.",
             lambda f: f["age_group"] == profile.age_group,
         ),
-        ("연령대를 가리지 않고 두루 쓰이는 운동으로 골랐습니다.", lambda f: True),
+        ("연령대를 가리지 않고 두루 쓰이는 운동으로 골랐어요.", lambda f: True),
     )
 
     for notice, test in ladder:
@@ -240,10 +294,10 @@ def _prescriptions(profile: RunProfile, factor: str, band: str) -> tuple[list[Ch
     return [], []
 
 
-def read_profile(profile: RunProfile) -> Read:
-    factor, band, percentile, rows = target_factor(profile)
+def read_profile(profile: RunProfile, focus: str | None = None) -> Read:
+    factor, band, percentile, rows = target_factor(profile, focus)
     chunks, notices = _prescriptions(profile, factor, band)
-    return Read(profile, factor, band, percentile, rows, chunks, notices)
+    return Read(profile, factor, band, percentile, rows, chunks, notices, focused=bool(focus))
 
 
 def _brief(read: Read) -> dict[str, Any]:
@@ -264,23 +318,34 @@ def _brief(read: Read) -> dict[str, Any]:
         "성별": read.profile.sex,
         "연령대": read.profile.age_group,
         "대상_체력요인": read.factor or None,
+        # 키울 요인을 부르는 말. 코치는 이 말로 부르고, 측정의 「상태」는 수준을 말할
+        # 때만 쓴다(PLAN_SYSTEM).
+        "대상_요인을_고른_까닭": (
+            words.focus_reason(read.focused) if read.focused or read.factor else None
+        ),
         "측정": measured,
     }
 
 
-def _rule_copy(read: Read, constraints: Constraints, slot: Slot) -> dict[str, str]:
+def _rule_copy(read: Read, constraints: Constraints, slot: Slot, weeks: int) -> dict[str, str]:
     child = words.FOCUS_COPY.get(read.factor, "이번 주도 몸을 움직여 볼까요")
     if slot.weekly:
         child = "이번 주에 한 번은 다 같이 길게 움직여 볼까요"
-    where = (
-        f"주에 한 번 {slot.minutes}분"
-        if slot.weekly
-        else f"주 {constraints.days_per_week}회 {slot.minutes}분"
-    )
-    if read.factor and read.band:
-        parent = f"{words.factor_copy(read.factor, read.band)}. {where}이면 충분합니다"
+        where = f"주에 한 번 {slot.minutes}분"
+    elif constraints.days_per_week == 1 and weeks == 1:
+        # 한 주에 한 번, 한 주만 — 편성이 하루뿐이다(BE 의 하루 편성). 「주 1회」라고
+        # 쓰면 한 주 계획으로 읽힌다. 날짜가 오늘이 아닐 수 있어 「오늘」로 쓰지 않는다.
+        where = f"하루 {slot.minutes}분"
     else:
-        parent = f"{where}으로 짰습니다. 측정을 하면 요인을 짚어 드릴 수 있습니다"
+        where = f"주 {constraints.days_per_week}회 {slot.minutes}분"
+    # 키울 요인은 고른 까닭으로 부른다. 「유연성은 꾸준히 하고 있는 영역입니다」처럼
+    # 구간 문구로 부르면 왜 그걸 하라는지 읽히지 않는다.
+    if read.focused:
+        parent = f"{words.GUARDIAN_FOCUS}인 {read.factor}에 맞춰 {where}으로 짰습니다"
+    elif read.factor and read.band:
+        parent = f"{with_topic(read.factor)} {words.GROW_NOW}입니다. {where}이면 충분합니다"
+    else:
+        parent = f"{where}으로 짰습니다. 체력을 재면 무엇을 키우면 좋을지 알려 드릴게요"
     return {"child": child, "parent": parent}
 
 
@@ -289,6 +354,13 @@ def _rule_title(read: Read, slot: Slot, start_date: date) -> str:
         return f"이번 주 함께 {read.factor or '전신'} 기르기"
     day = start_date + timedelta(days=slot.offset)
     return f"{_WEEKDAYS[day.weekday()]} {read.factor or '전신'} 기르기"
+
+
+def _weekday(slot: Slot, start_date: date) -> str | None:
+    """일간 자리의 요일. 주간은 날을 정하지 않아 None 이다."""
+    if slot.weekly:
+        return None
+    return _WEEKDAYS[(start_date + timedelta(days=slot.offset)).weekday()]
 
 
 def _rule_reason(evidence_base: list[int]) -> str:
@@ -376,19 +448,36 @@ def _by_llm(
     tally: Tally,
 ) -> list[dict[str, Any]] | None:
     ids = {f"c{index}": clip for index, clip in enumerate(pool)}
+    recent = constraints.recent
     payload = {
         "참여자": _brief(read),
         "조건": {
             "조용히": constraints.quiet,
             "좁은_공간": constraints.small_space,
             "도구_없이": constraints.no_props,
+            "보호자도_함께": constraints.with_companion,
         },
         "자리": [
             {
                 "day_offset": slot.offset,
+                # 코치가 요일을 짐작하지 않게 준다. day_offset 만 주었을 때 수요일 편성
+                # 제목이 「유연성을 키우는 월요일」로 왔다. 주간은 날을 정하지 않아 비운다.
+                "날짜": (
+                    None if slot.weekly else (start_date + timedelta(days=slot.offset)).isoformat()
+                ),
+                "요일": _weekday(slot, start_date),
                 "종류": slot.kind,
                 "분": slot.minutes,
                 "단계별_편수": catalog.clip_counts(slot.minutes),
+                **(
+                    {
+                        "본운동_대상_요인_편수": catalog.focus_quota(
+                            catalog.clip_counts(slot.minutes)["본운동"]
+                        )
+                    }
+                    if read.focused
+                    else {}
+                ),
             }
             for slot in slots
         ],
@@ -400,6 +489,7 @@ def _by_llm(
             {
                 "id": key,
                 "이름": clip.title,
+                "영상": clip.video_id,
                 "단계": clip.phase,
                 "요인": clip.fitness_factor or "",
                 "초": clip.duration_sec,
@@ -407,15 +497,28 @@ def _by_llm(
                 "조용": clip.quiet,
                 "좁은공간": clip.home_ok,
                 "도구": clip.needs_props,
+                "최근": clip.video_id in recent,
             }
             for key, clip in ids.items()
         ],
         "요청": (
             "자리마다 한 회씩 짠다. day_offset 은 그 자리 값이다. "
             f"day_offset 이 {WEEKLY_SLOT} 인 자리는 주간 미션으로, 그 주 안에 한 번 "
-            "길게 온 가족이 함께 한다 — 날짜를 정하지 않는다. "
-            "자리의 단계별_편수만큼만 고른다 — 화면에서 한 편을 여러 세트 반복해 "
-            "시간을 채우므로 영상 길이의 합을 분에 맞출 필요가 없다."
+            "길게 온 가족이 함께 한다. 날짜는 정하지 않는다. "
+            "자리의 단계별_편수만큼만 고른다. 화면에서 한 편을 여러 세트 반복해 "
+            "시간을 채우므로 영상 길이의 합을 분에 맞출 필요가 없다. "
+            "최근 이 true 인 클립은 이 사람이 요즘 받은 영상이다. 단계와 요인이 같은 다른 "
+            "클립이 모자랄 때만 고른다. 한 회 안에서는 영상 이 같은 클립을 둘 넘게 "
+            "고르지 않는다. 다른 영상이 모자랄 때만 같은 영상을 다시 쓴다."
+            + (
+                f" 대상 요인 {read.factor} 은 보호자가 키워 주고 싶은 역량이다. 본운동의 "
+                "4분의 3 이상(자리의 본운동_대상_요인_편수만큼)을 요인 이 "
+                f"{read.factor} 인 클립으로 고른다. 그런 클립이 모자라면 최근 이 true "
+                "이거나 같은 영상인 것이라도 이 요인을 먼저 고르고, 그래도 모자라면 다른 "
+                "요인으로 채운다. 준비운동과 정리운동은 이 비율과 상관없다."
+                if read.focused
+                else ""
+            )
         ),
     }
 
@@ -445,7 +548,16 @@ def _by_llm(
         if not any(offered.values()):
             continue
 
-        chosen = _fill(offered, pool, catalog.clip_counts(slot.minutes), week, tally)
+        chosen = _fill(
+            offered,
+            pool,
+            catalog.clip_counts(slot.minutes),
+            week,
+            tally,
+            recent,
+            start_date.isoformat(),
+            read.factor if read.focused else "",
+        )
         week |= {clip.title for _, clip in chosen}
         # 코치가 골랐는데 이 회에서 빠진 동작. 글에 그 이름이 남아 있으면 못 쓴다.
         picked = {clip.title for clips in offered.values() for clip in clips}
@@ -454,10 +566,11 @@ def _by_llm(
             {key: day_plan.get(key) for key in ("title", "child", "parent", "reason")},
             {
                 "title": _rule_title(read, slot, start_date),
-                **_rule_copy(read, constraints, slot),
+                **_rule_copy(read, constraints, slot, weeks),
                 "reason": _rule_reason(evidence_base),
             },
             dropped,
+            _weekday(slot, start_date),
             tally,
         )
         missions.append(
@@ -480,39 +593,86 @@ def _fill(
     want: dict[str, int],
     week: set[str],
     tally: Tally,
+    recent: Collection[str] = (),
+    seed: str = "",
+    focus: str = "",
 ) -> list[tuple[str, catalog.Clip]]:
     """단계마다 정한 편수를 채운다.
 
-    코치가 고른 것 중 이번 주에 안 쓴 것 → 목록에서 안 쓴 것 → 코치가 고른 쓴 것 →
-    목록에서 쓴 것 차례다. 코치는 편수를 모자라게 고르거나 이미 쓴 동작을 또
-    고른다 — 프롬프트로 시켜도 그렇다. 목록은 순위대로 서 있어 앞에서부터 채운다.
-    목록에도 없으면 모자란 채로 둔다. 조건을 몰래 풀지 않는다.
+    코치가 고른 새 것 → 목록의 새 것 → 코치가 고른 헌 것 → 목록의 헌 것 차례다.
+    헌 것은 이번 주에 쓴 동작이거나 최근(recent)에 받은 영상이다. 코치는 편수를
+    모자라게 고르거나 이미 쓴 동작 · 최근 영상을 또 고른다 — 프롬프트로 시켜도
+    그렇다. 목록은 순위대로 서 있어 앞에서부터 채운다. 목록에도 없으면 모자란
+    채로 둔다. 조건을 몰래 풀지 않는다.
+
+    한 회 안에서 한 영상이 여러 칸을 채우지 않게, 먼저 그 회에 아직 없는 영상으로만
+    채우고 모자라면 그때 같은 영상의 다른 클립을 쓴다. 한 영상의 클립이 일곱 칸 중
+    다섯 칸을 채운 적이 있다. 후보가 한 영상뿐이면(유아기) 그대로 다시 쓴다.
+
+    헌 것끼리는 코치가 고른 것을 앞세우지 않는다. 이번 주에 안 쓴 동작 → 오래전에
+    받은 영상(catalog.least_recent_first) 차례고, 같은 때 받은 것끼리는 seed(편성
+    시작일)로 섞는다. 코치는 날마다 같은 최근 영상을 고른다. 유아기 정리운동 후보
+    일곱이 모두 한 영상에서 나와 늘 최근이라, 코치가 고른 같은 클립이 14일 중 13일
+    나왔다.
+
+    focus(보호자가 키워 주고 싶은 역량)가 있으면 본운동은 먼저 4분의 3 칸
+    (catalog.focus_quota)을 그 역량 클립으로 채운다. 코치가 고른 그 역량 클립 →
+    목록의 그 역량 클립 차례고, 헌 것 · 한 회 안에서 이미 나온 영상이라도 그 역량이면
+    다른 요인보다 먼저 쓴다(사용자 결정: 그 역량 → 새 영상). 그 역량이 모자라면
+    남은 칸은 위의 차례대로 채운다. 코치가 그 역량이 아닌 본운동을 넷 골랐으면
+    뒤의 것부터 밀려난다. 준비 · 정리운동은 focus 로 바뀌지 않는다.
     """
     chosen: list[tuple[str, catalog.Clip]] = []
     today: set[str] = set()
+    videos: set[str] = set()
     # 코치가 그날 고른 동작은 목록에서 채울 때 건드리지 않는다. 늘리는 동작은 준비·정리
     # 두 단계에 다 있어서, 앞 단계를 채우다 코치가 뒤 단계에 둔 것을 먼저 가져간 적이 있다.
     reserved = {clip.title for clips in offered.values() for clip in clips}
-    for phase in catalog.PHASES:
+    # 영상도 같다(reserved_videos). 목록에서 채우다 코치가 뒤 단계에 둔 영상의 다른
+    # 클립을 먼저 넣으면, 뒤 단계에서 코치가 고른 것이 「이미 나온 영상」 이 되어 밀려난다.
+    for index, phase in enumerate(catalog.PHASES):
+        reserved_videos = {
+            clip.video_id for later in catalog.PHASES[index + 1 :] for clip in offered[later]
+        }
         picked = offered[phase]
         spare = [clip for clip in pool if clip.phase == phase and clip.title not in reserved]
+
+        def worn(clip: catalog.Clip) -> bool:
+            return clip.title in week or clip.video_id in recent
+
+        older_first = catalog.least_recent_first(recent, seed, sum(want.values()))
         order = (
-            [clip for clip in picked if clip.title not in week]
-            + [clip for clip in spare if clip.title not in week]
-            + [clip for clip in picked if clip.title in week]
-            + [clip for clip in spare if clip.title in week]
+            [clip for clip in picked if not worn(clip)]
+            + [clip for clip in spare if not worn(clip)]
+            + sorted(
+                [clip for clip in picked if worn(clip)] + [clip for clip in spare if worn(clip)],
+                key=lambda clip: (clip.title in week, older_first(clip)),
+            )
         )
+        rounds = [(order, want[phase])]
+        if focus and phase == "본운동":
+            mine = [clip for clip in order if clip.fitness_factor == focus]
+            # 그 역량 안에서는 코치가 고른 새 것 → 목록의 새 것 → 헌 것 차례를 지킨다.
+            rounds.insert(0, (mine, min(want[phase], catalog.focus_quota(want[phase]))))
         count = 0
-        for clip in order:
-            if count == want[phase]:
-                break
-            if clip.title in today:
-                continue
-            today.add(clip.title)
-            chosen.append((phase, clip))
-            count += 1
-            if clip not in picked:
-                tally.filled += 1
+        for candidates, limit in rounds:
+            for other_videos_only in (True, False):
+                for clip in candidates:
+                    if count >= limit:
+                        break
+                    if clip.title in today:
+                        continue
+                    if other_videos_only and (
+                        clip.video_id in videos
+                        or (clip not in picked and clip.video_id in reserved_videos)
+                    ):
+                        continue
+                    today.add(clip.title)
+                    videos.add(clip.video_id)
+                    chosen.append((phase, clip))
+                    count += 1
+                    if clip not in picked:
+                        tally.filled += 1
     return chosen
 
 
@@ -520,17 +680,24 @@ def _checked_text(
     written: dict[str, Any],
     fallback: dict[str, str],
     dropped: set[str],
+    weekday: str | None,
     tally: Tally,
 ) -> dict[str, str]:
     """코치가 쓴 글을 칸마다 잰다. 어긋난 칸만 규칙 문구로 바꾼다.
 
-    길이(title 16 · child 45 · parent 70)와 금지 어휘, 그리고 이 회에서 빠진 동작의
-    이름을 본다. 프롬프트로 시키지만 지켜지지 않았다 — 주간 parent 가 92자로
-    나간 적이 있다. 반쯤 고쳐 쓰지 않는다. 그 칸을 통째로 바꾼다.
+    길이(title 16 · child 45 · parent 70)와 금지 어휘, 이 회에서 빠진 동작의
+    이름, 그 자리와 다른 요일(주간이면 어느 요일이든), 제목에 요인 이름
+    대신 들어온 이유 문구(「지금 키우기 좋은 영역」), 그리고 요인별 등급
+    (「심폐지구력 2등급」 — 화면의 등급은 국민체력100 등급 카드뿐이다)을 본다. 프롬프트로
+    시키지만 지켜지지 않았다 — 주간 parent 가 92자로 나간 적이 있다. 반쯤 고쳐 쓰지
+    않는다. 그 칸을 통째로 바꾼다.
     """
     out: dict[str, str] = {}
     for key, rule in fallback.items():
         value = written.get(key)
+        # 코치는 시켜도 가운데 점과 대시를 쓴다. 바꾼 글로 길이를 잰다.
+        if isinstance(value, str):
+            value = words.plain(value.strip())
         limit = coach_llm.LIMITS.get(key)
         fits = (
             isinstance(value, str)
@@ -538,6 +705,9 @@ def _checked_text(
             and (limit is None or len(value) <= limit)
             and not words.banned_words_in(value)
             and not any(name in value for name in dropped)
+            and not any(day in value for day in _WEEKDAYS if day != weekday)
+            and not (key == "title" and coach_llm.names_the_reason(value))
+            and not words.grades_in(value)
         )
         if fits:
             out[key] = str(value)
@@ -578,6 +748,12 @@ def _by_rule(
             conditions=constraints.conditions(),
             exclude=used,
             level=catalog.level_of(read.percentile),
+            # BE 는 하루씩 부른다. 날짜로 섞고 최근에 받은 영상을 미뤄 날마다 같은
+            # 영상이 나오지 않게 한다.
+            seed=start_date.isoformat(),
+            recent=constraints.recent,
+            # 보호자가 키워 주고 싶은 역량이면 본운동 4분의 3 을 그 역량으로 채운다.
+            focus=read.factor if read.focused else "",
         )
         flat = [(phase, clip) for phase in catalog.PHASES for clip in picked[phase]]
         if not flat:
@@ -589,7 +765,7 @@ def _by_rule(
                 slot,
                 sessions,
                 _rule_title(read, slot, start_date),
-                _rule_copy(read, constraints, slot),
+                _rule_copy(read, constraints, slot, weeks),
                 reason,
                 start_date,
                 weeks,
@@ -611,7 +787,7 @@ def build(
     if not movers:
         return Plan(
             [
-                Step(1, "assess", "ok", "편성 대상이 없습니다 — 전원 응원"),
+                Step(1, "assess", "ok", "모두 응원하는 사람이라 편성할 사람이 없습니다"),
                 Step(2, "retrieve", "failed", "검색하지 않음"),
                 Step(3, "compose", "failed", "움직일 사람이 없어 중단"),
                 Step(4, "verify", "failed", "인용 0건"),
@@ -621,16 +797,38 @@ def build(
             "no_relevant_source",
         )
 
-    reads = [read_profile(mover) for mover in movers]
+    # 보호자가 키워 주고 싶은 역량은 일간을 받는 사람(주행자) 몫이다. 동반자는
+    # 제 몫을 따로 받지 않으니 측정으로 고른 요인을 그대로 둔다.
+    steering = {id(p) for p in movers if p.role == "주행자"} or {id(movers[0])}
+    reads = [
+        read_profile(mover, constraints.focus_factor if id(mover) in steering else None)
+        for mover in movers
+    ]
     driver = next((r for r in reads if r.profile.role == "주행자"), reads[0])
     measured = [r for r in reads if r.percentile is not None]
-    assess_summary = (
-        f"{driver.factor} 백분위 {driver.percentile} · 대상 요인 = {driver.factor}"
-        if driver.percentile is not None
-        else f"연령대 {driver.profile.age_group} · 만 {driver.profile.age}세 · 측정값 없음"
-    )
+    # 잰 항목이 있는데 백분위가 비면 또래 기준이 없는 것이다(7–10세는 늘 그렇다).
+    # 「측정값 없음」은 잰 항목이 정말 없을 때만 쓴다.
+    no_peer = "또래 비교 기준 없음"
+    if driver.focused:
+        focus_measured = any(row["factor"] == driver.factor for row in driver.rows)
+        scored = (
+            f"{driver.factor} 백분위 {driver.percentile}"
+            if driver.percentile is not None
+            else f"{driver.factor} {no_peer if focus_measured else '측정값 없음'}"
+        )
+        assess_summary = f"{scored}, 대상 요인 = {driver.factor}({words.GUARDIAN_FOCUS})"
+    elif driver.percentile is not None:
+        assess_summary = (
+            f"{driver.factor} 백분위 {driver.percentile}, "
+            f"대상 요인 = {driver.factor}({words.GROW_NOW})"
+        )
+    else:
+        assess_summary = (
+            f"연령대 {driver.profile.age_group}, 만 {driver.profile.age}세, "
+            f"{no_peer if driver.rows else '측정값 없음'}"
+        )
     if len(reads) > 1:
-        assess_summary += f" · 편성 대상 {len(reads)}명(측정 {len(measured)}명)"
+        assess_summary += f", 편성 대상 {len(reads)}명(측정 {len(measured)}명)"
     steps = [Step(1, "assess", "ok", assess_summary)]
 
     notices: list[str] = []
@@ -668,12 +866,15 @@ def build(
             prescribed=prescribed,
             # 공단 영상에는 알맞은 체력수준이 적혀 있다. 대상 요인의 백분위로 맞춘다.
             level=catalog.level_of(read.percentile),
+            seed=start_date.isoformat(),
+            recent=constraints.recent,
         )
         if pool_notice:
             notices.append(pool_notice)
         if not pool:
             continue
-        evidence_base = [citations.add(chunk) for chunk in read.chunks[:2]]
+        # 이름이 같은 처방 둘은 한 번호가 된다(Citations). 번호는 한 번만 둔다.
+        evidence_base = list(dict.fromkeys(citations.add(chunk) for chunk in read.chunks[:2]))
         mine = [{"ref": read.profile.ref, "role": read.profile.role}] + cheerers
         slots = [
             Slot("일간", offset, constraints.minutes_per_session, mine) for offset in day_slots
@@ -693,7 +894,7 @@ def build(
         clip_total += sum(len(mission["sessions"]) for mission in theirs)
 
     steps.append(
-        Step(2, "retrieve", "ok", f"처방 청크 {chunk_total}건 · 클립 후보 {len(catalog.clips())}개")
+        Step(2, "retrieve", "ok", f"처방 청크 {chunk_total}건, 클립 후보 {len(catalog.clips())}개")
     )
 
     if not missions or not citations:
@@ -704,12 +905,12 @@ def build(
         return Plan(steps, None, True, "no_citation_generated")
 
     how = "코치가" if by_llm else "규칙으로"
-    summary = f"미션 {len(missions)}건 · 클립 {clip_total}개 · {how} 편성"
+    summary = f"미션 {len(missions)}건, 클립 {clip_total}개, {how} 편성"
     # 코치의 편성을 손봤으면 그만큼 말한다.
     if tally.filled:
-        summary += f" · 목록에서 {tally.filled}편 채움"
+        summary += f", 목록에서 {tally.filled}편 채움"
     if tally.rewritten:
-        summary += f" · 문구 {tally.rewritten}칸 규칙으로"
+        summary += f", 문구 {tally.rewritten}칸 규칙으로"
     steps.append(Step(3, "compose", "ok" if by_llm else "partial", summary))
 
     proposal: dict[str, Any] = {
@@ -717,7 +918,7 @@ def build(
         "citations": citations.dump(),
     }
     if notices:
-        proposal["notices"] = sorted(set(notices))
+        proposal["notices"] = sorted({words.plain(notice) for notice in notices})
     return Plan(steps, proposal, False, None)
 
 

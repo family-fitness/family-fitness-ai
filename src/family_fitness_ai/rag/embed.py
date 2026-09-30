@@ -10,8 +10,10 @@
            재 보니 코사인 1.00000 이었다. 임베딩 서버를 따로 띄우지 않는다.
     http   밖에 띄운 llama.cpp 서버에 묻는다(EMBEDDING_URL).
 
-local 은 모델을 처음 쓸 때 올린다. 띄우면서 올리면 --reload 로 코드를 고칠
-때마다 기다려야 하고, 평가·궤적만 받는 요청은 모델이 필요 없다.
+local 은 띄울 때 모델을 올린다(warm_up, EMBEDDING_WARMUP). 처음 쓸 때 올리면 첫
+검색이 모델을 기다리느라 10초 가까이 걸려 BE 의 읽기 한도(검색 4초)를 넘었다.
+--reload 로 코드를 고칠 때마다 기다리기 싫으면 EMBEDDING_WARMUP=0 으로 끈다 —
+그때는 처음 쓸 때 올린다.
 
     python -m family_fitness_ai.rag.embed    모델을 받아 두고 인덱스와 맞는지 잰다
 """
@@ -23,6 +25,7 @@ import csv
 import logging
 import sys
 import threading
+import time
 from importlib.util import find_spec
 from pathlib import Path
 from typing import Any
@@ -69,6 +72,15 @@ def embed(texts: list[str]) -> np.ndarray:
 
 def embed_one(text: str) -> np.ndarray:
     return embed([text])[0]
+
+
+def warm_up() -> None:
+    """local 모델을 지금 올린다. http 는 건드리지 않는다 — 저쪽 서버가 이미 올려 두었다."""
+    if backend() != "local":
+        return
+    started = time.perf_counter()
+    embed_one("체력")
+    log.info("임베딩 모델을 올려 두었다 (%.1f초)", time.perf_counter() - started)
 
 
 def _over_http(texts: list[str]) -> list[Any]:
@@ -180,11 +192,11 @@ def main() -> None:
     path = model_path(download=True)
     print(f"모델 {path.name} ({path.stat().st_size / 2**20:.0f} MB)")
 
-    from family_fitness_ai.rag.index import corpus
+    from family_fitness_ai.rag.index import allow_long_fields, corpus
 
     # 원문으로 견준다. corpus() 는 화면에 나갈 말로 고쳐 읽어서(「미달」→「참가」)
     # 인덱스를 만들 때의 글자와 다르다.
-    csv.field_size_limit(sys.maxsize)
+    allow_long_fields()
     meta = settings().index_dir / "corpus_meta.csv"
     with meta.open(encoding="utf-8-sig", newline="") as fh:
         texts = [row["text"] for row in csv.DictReader(fh)]

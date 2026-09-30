@@ -66,6 +66,42 @@ def test_a_missing_field_is_one_error_shape():
     assert response.json()["error"]["code"] == "BAD_REQUEST"
 
 
+def test_an_unknown_focus_factor_is_refused():
+    """모르는 요인을 조용히 버리면 보호자가 고른 것이 빠진 채로 편성된다."""
+    response = client.post(
+        "/v1/coach/runs",
+        json={
+            "profile_refs": [CHILD],
+            "period": {"start_date": "2026-09-07", "weeks": 1},
+            "constraints": {"focus_factor": "체력"},
+        },
+    )
+    assert response.status_code == 400
+    body = response.json()["error"]
+    assert body["code"] == "BAD_REQUEST"
+    assert "focus_factor" in body["message"]
+
+
+@needs_release
+@needs_index
+@needs_embedder
+def test_the_guardians_focus_leads_the_run():
+    state = _finish(
+        {
+            "profile_refs": [{**CHILD, "ref": "p_focus"}],
+            "period": {"start_date": "2026-09-07", "weeks": 1},
+            "constraints": {
+                "days_per_week": 1,
+                "minutes_per_session": 15,
+                "focus_factor": "평형성",
+                "with_companion": True,
+            },
+        }
+    )
+    assert state["status"] == "succeeded", state
+    assert "대상 요인 = 평형성(보호자가 키워 주고 싶은 역량)" in state["steps"][0]["summary"]
+
+
 def test_video_search_needs_a_factor_or_a_name():
     response = client.post("/v1/videos/search", json={"age_group": "유소년"})
     assert response.status_code == 400

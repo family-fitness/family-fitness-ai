@@ -15,6 +15,8 @@ import os
 import pytest
 
 os.environ["COACH_LLM"] = "0"
+# 띄울 때 모델을 올리지 않는다. lifespan 을 도는 시험이 605 MB 모델을 기다리지 않게.
+os.environ["EMBEDDING_WARMUP"] = "0"
 
 from family_fitness_ai.common.settings import settings  # noqa: E402
 

@@ -8,13 +8,15 @@ API 를 부르지 않는다. 받아 둔 원자료에서 사례마다 한 영상�
 
 from __future__ import annotations
 
+import csv
 import json
+import traceback
 from datetime import date
 from functools import lru_cache
 from pathlib import Path
 
 import pytest
-from conftest import needs_index, needs_release
+from conftest import needs_embedder, needs_index, needs_release
 
 from family_fitness_ai.coach import compose, verify
 from family_fitness_ai.common.settings import settings
@@ -37,6 +39,12 @@ def _table() -> tuple[tuple[tuple[str, str], ...], ...]:
 def _rows(case: str) -> list[dict[str, str]]:
     video_id = Path(CASES[case]).stem
     return [dict(row) for row in _table() if dict(row)["video_id"] == video_id]
+
+
+def _case_row(case: str) -> dict:
+    """그 사례 영상의 가이드 장면 한 줄."""
+    file_nm = CASES[case]
+    return next(row for row in FIXTURE["rows"][kspo.GUIDE] if row["file_nm"] == file_nm)
 
 
 def _clip(**given) -> catalog.Clip:
@@ -128,6 +136,37 @@ def test_a_phase_is_borrowed_from_the_standard_program():
     assert {r["phase_on_video"] for r in rows} == {""}
 
 
+def test_a_phase_is_not_borrowed_from_a_prevention_program():
+    """질환 · 예방 프로그램은 클립으로 쓰지 않는다. 그 단계도 빌리지 않는다 — 「우울증
+    예방 운동프로그램(댄스운동 편)」 00044 만 팔굽혀펴기를 준비운동에 두어, 팔굽혀펴기
+    영상이 모두 준비운동 자리에 들어갔다. 표준운동은 본운동이라 적는다(받아 둔 원자료)."""
+    standard = {
+        "file_nm": "0AUDLJ08S_00035.mp4",
+        "vdo_ttl_nm": "성인기 3주차 운동프로그램",
+        "vdo_desc": "성인을 위한 주간 운동프로그램 중 3주차에 해당하는 표준운동프로그램",
+        "trng_nm": "팔 굽혀 펴기 (Push up)",
+        "trng_sqnc_nm": "본 운동",
+    }
+    prevention = {
+        "file_nm": "0AUDLJ08S_00044.mp4",
+        "vdo_ttl_nm": "우울증 예방 운동프로그램(댄스운동 편)",
+        "vdo_desc": "우울증을 예방하기 위한 댄스운동프로그램",
+        "trng_nm": "팔 굽혀 펴기",
+        "trng_se_nm": "준비 운동",
+    }
+    got = kspo.borrowed_from({kspo.STD: [standard], kspo.ROUTINE: [prevention]})
+    assert got[kspo.join_key("팔 굽혀 펴기")].phases == ("본운동",)
+
+
+@needs_release
+@has_table
+def test_push_ups_are_not_a_warm_up_in_the_table():
+    rows = list(csv.DictReader((settings().release_dir / kspo.OUT).open(encoding="utf-8")))
+    push_ups = [r for r in rows if kspo.join_key(r["name_on_video"]) == "팔굽혀펴기"]
+    assert push_ups
+    assert {r["phase"] for r in push_ups} == {"본운동"}
+
+
 @needs_index
 def test_a_flexibility_move_without_a_borrowed_phase_goes_to_both_ends():
     rows = _rows("가이드 · 유연성 → 준비·정리")
@@ -178,6 +217,25 @@ def test_the_table_has_the_clip_and_label_columns():
         assert list(row) == list(kspo.COLUMNS)
         assert row["phase"] in kspo.PHASES
         assert row["is_exercise"] == "True"
+
+
+def test_the_citation_label_drops_the_step_number_like_the_name():
+    """영상 제목 「등/어깨 뒤쪽 스트레칭-1」의 「-1」은 단계 번호다. 편성 이름처럼 인용
+    label 에서도 뗀다 — 「국민체력100 운동처방가이드 · 등/어깨 뒤쪽 스트레칭-1」로 나갔다."""
+    scene = dict(_case_row("가이드 · 요인·수준이 제 칸에"))
+    scene.update(file_nm="X_step.mp4", vdo_ttl_nm="등/어깨 뒤쪽 스트레칭-1")
+    rows = kspo.build({kspo.GUIDE: [scene]}, {"X_step.mp4": True}, borrowed={})
+    assert rows
+    label = "국민체력100 운동처방가이드 · 등/어깨 뒤쪽 스트레칭"
+    assert {r["citation_label"] for r in rows} == {label}
+
+
+@needs_release
+@has_table
+def test_no_citation_label_in_the_table_ends_with_a_step_number():
+    rows = list(csv.DictReader((settings().release_dir / kspo.OUT).open(encoding="utf-8")))
+    assert rows
+    assert not [r["citation_label"] for r in rows if kspo._STEP.search(r["citation_label"])]
 
 
 @needs_index
@@ -315,3 +373,193 @@ def test_every_video_hit_says_where_to_play_it(monkeypatch: pytest.MonkeyPatch):
     assert out["hits"][0]["source"] == "kspo"
     scores = [h["score"] for h in out["hits"]]
     assert scores == sorted(scores, reverse=True)
+
+
+# ── 어르신: 성인 영상을 또래로 ──────────────────────────────────────────────
+# 팀 결정 — 어르신 전용 영상을 따로 만들지 않고 성인 영상(공단 「공통」 포함)을 똑같이
+# 쓴다. 공단 어르신 영상은 싣지 않으므로, 성인을 또래로 치지 않으면 65세 이상은
+# 유아기·유소년 영상까지 섞인 후보를 받고, 규칙 편성은 한 편도 못 고른다.
+
+
+def test_seniors_share_the_adult_age_group():
+    assert catalog.ages_for("어르신") == ("어르신", "성인")
+    assert catalog.ages_for("유소년") == ("유소년",)
+
+
+@needs_release
+@needs_index
+@has_table
+def test_seniors_get_adult_clips_first_and_no_notice():
+    for factor in ("근력", "유연성", ""):
+        pool, notice = catalog.pool("어르신", factor=factor)
+        assert pool
+        assert notice == ""
+        assert {c.age_group for c in pool} <= {"어르신", "성인"}
+        assert {c.source for c in pool} == {"youtube", "kspo"}
+
+
+@needs_release
+@needs_index
+@has_table
+def test_the_rule_plan_fills_a_senior_session():
+    picked = catalog.routine("어르신", 15, factor="근력")
+    assert {phase: len(clips) for phase, clips in picked.items()} == catalog.clip_counts(15)
+    assert all(c.age_group == "성인" for clips in picked.values() for c in clips)
+
+
+@needs_release
+@needs_index
+@needs_embedder
+@has_table
+def test_a_rule_plan_for_a_seventy_year_old_is_not_refused():
+    grandma = compose.RunProfile(ref="g", role="주행자", age=70, age_unit="세", sex="F")
+    plan = compose.build([grandma], date(2026, 10, 5), 1, compose.Constraints())
+    assert not plan.refused, plan.steps
+    assert plan.proposal is not None
+    assert "notices" not in plan.proposal or not any(
+        "다른 연령대" in n for n in plan.proposal["notices"]
+    )
+
+
+@needs_release
+@needs_index
+@has_table
+def test_video_search_gives_seniors_the_adult_kspo_clips():
+    from family_fitness_ai.video.videos import kspo_hits
+
+    senior = kspo_hits("어르신", ("유연성",), ())
+    adult = kspo_hits("성인", ("유연성",), ())
+    assert senior
+    assert {h["video_id"] for h in senior} == {h["video_id"] for h in adult}
+
+
+# ── 설명이 적은 갈래 ─────────────────────────────────────────────────────────
+# 운동처방가이드 「운동프로그램」 묶음은 API 가 체력요인을 모두 「유연성」으로 적는다.
+# 설명은 「유산소운동에 해당하는 빠르게 걷기」 「가슴운동에 해당하는 팔굽혀펴기」다.
+
+
+@pytest.mark.parametrize(
+    ("description", "factors"),
+    [
+        ("운동프로그램 중, 유산소운동에 해당하는 빠르게 걷기운동을 설명한", ("심폐지구력",)),
+        ("체력 증진 운동프로그램 중, 가슴운동에 해당하는 팔굽혀펴기운동을", ("근력",)),
+        ("유연성 운동 중, 스트레칭에 해당하는 목 옆으로 늘리기운동을", ("유연성",)),
+        ("유연성 운동 중, 고양이 자세운동을 설명한", ()),
+        ("", ()),
+    ],
+)
+def test_the_kind_in_the_description_gives_the_factor(description, factors):
+    assert kspo.kind_factors(description) == factors
+
+
+def test_the_kind_beats_the_api_factor():
+    scene = dict(_case_row("가이드 · 요인·수준이 제 칸에"))
+    scene.update(
+        file_nm="X_kind.mp4",
+        trng_nm="빠르게 걷기",
+        vdo_ttl_nm="빠르게 걷기(3단계)",
+        ftns_fctr_nm="유연성",
+        vdo_desc="운동프로그램 중, 유산소운동에 해당하는 빠르게 걷기운동을 설명한 동영상",
+    )
+    rows = kspo.build({kspo.GUIDE: [scene]}, {"X_kind.mp4": True}, borrowed={})
+    assert rows
+    assert {(r["fitness_factor"], r["phase"]) for r in rows} == {("심폐지구력", "본운동")}
+
+
+def test_a_prescription_video_borrows_the_kind_not_the_api_factor():
+    """운동처방동영상은 요인 칸이 없어 같은 이름의 가이드에서 빌린다. 가이드 설명에
+    갈래가 적혀 있으면 빌려 주는 요인도 그 갈래다 — API 가 「유연성」으로 적었어도."""
+    guide = dict(_case_row("가이드 · 요인·수준이 제 칸에"))
+    guide.update(
+        file_nm="X_guide.mp4",
+        trng_nm="빠르게 걷기",
+        vdo_ttl_nm="빠르게 걷기(3단계)",
+        ftns_fctr_nm="유연성",
+        vdo_desc="운동프로그램 중, 유산소운동에 해당하는 빠르게 걷기운동을 설명한 동영상",
+    )
+    video = next(r for r in FIXTURE["rows"][kspo.VIDEO_OP] if r.get("vdo_ttl_nm"))
+    video = dict(
+        video,
+        file_nm="X_video.mp4",
+        trng_nm="빠르게 걷기",
+        vdo_ttl_nm="빠르게 걷기",
+        vdo_desc="실내에서 할 수 있는 운동 중, 빠르게 걷기운동을 설명한 운동처방 동영상",
+    )
+    rows_by_op = {kspo.GUIDE: [guide], kspo.VIDEO_OP: [video]}
+    assert kspo.borrowed_from(rows_by_op)[kspo.join_key("빠르게 걷기")].factor == "심폐지구력"
+    rows = kspo.build(rows_by_op, {"X_guide.mp4": False, "X_video.mp4": True})
+    assert rows
+    assert {(r["fitness_factor"], r["phase"]) for r in rows} == {("심폐지구력", "본운동")}
+
+
+@needs_release
+@has_table
+def test_both_brisk_walking_videos_are_cardio_in_the_table():
+    """가이드 00601 과 처방동영상 00182 는 같은 「빠르게 걷기」다. 한쪽만 유연성으로
+    남으면 준비 · 정리 자리에 빠르게 걷기가 나간다."""
+    rows = list(csv.DictReader((settings().release_dir / kspo.OUT).open(encoding="utf-8")))
+    got: dict[str, set[tuple[str, str]]] = {"0AUDLJ08S_00182": set(), "0AUDLJ08S_00601": set()}
+    for r in rows:
+        if r["video_id"] in got:
+            got[r["video_id"]].add((r["fitness_factor"], r["phase"]))
+    assert got == {
+        "0AUDLJ08S_00182": {("심폐지구력", "본운동")},
+        "0AUDLJ08S_00601": {("심폐지구력", "본운동")},
+    }
+
+
+@needs_release
+@has_table
+def test_walking_and_push_ups_are_not_flexibility_in_the_table():
+    rows = list(csv.DictReader((settings().release_dir / kspo.OUT).open(encoding="utf-8")))
+    factors = {
+        (r["video_id"], r["fitness_factor"])
+        for r in rows
+        if r["video_id"] in ("0AUDLJ08S_00601", "0AUDLJ08S_00602")
+    }
+    assert factors == {("0AUDLJ08S_00601", "심폐지구력"), ("0AUDLJ08S_00602", "근력")}
+
+
+# ── 받기: 키가 로그 · 오류 문구에 남지 않는다 ────────────────────────────────
+# 공공데이터포털 키는 serviceKey 로 요청 주소에 들어간다. httpx 는 요청마다 INFO 로
+# 「HTTP Request: GET …?serviceKey=…」를 남기고, raise_for_status 의 오류 문구에도 주소를
+# 통째로 적는다. 로깅을 켠 곳(uvicorn · CI)에서 받으면 키가 그대로 남는다.
+
+SECRET = "not-a-real-key-1234"
+
+
+def _mock_get(monkeypatch: pytest.MonkeyPatch, status: int, body: dict) -> list[str]:
+    import httpx
+
+    urls: list[str] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        urls.append(str(request.url))
+        return httpx.Response(status, json=body)
+
+    client = httpx.Client(transport=httpx.MockTransport(handler))
+    monkeypatch.setattr(kspo.httpx, "get", lambda url, **kw: client.get(url, **kw))
+    monkeypatch.setattr(kspo.time, "sleep", lambda _: None)
+    return urls
+
+
+def test_fetching_does_not_log_the_key(monkeypatch, caplog):
+    body = {"response": {"body": {"totalCount": 1, "items": {"item": [{"file_nm": "a.mp4"}]}}}}
+    urls = _mock_get(monkeypatch, 200, body)
+    caplog.set_level("DEBUG")
+    rows = kspo.fetch(kspo.GUIDE, SECRET)
+    assert rows == [{"file_nm": "a.mp4"}]
+    assert SECRET in urls[0]  # 키는 주소로 간다
+    assert SECRET not in caplog.text
+
+
+def test_a_failed_fetch_does_not_show_the_key(monkeypatch, caplog):
+    _mock_get(monkeypatch, 401, {})
+    caplog.set_level("DEBUG")
+    with pytest.raises(BaseException) as failed:
+        kspo.fetch(kspo.GUIDE, SECRET)
+    # 받다 넘어지면 터미널 · CI 로그에 찍히는 것은 이 traceback 이다.
+    shown = "".join(traceback.format_exception(failed.value))
+    assert "401" in shown
+    assert SECRET not in shown
+    assert SECRET not in caplog.text
