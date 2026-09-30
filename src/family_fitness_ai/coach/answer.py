@@ -50,7 +50,7 @@ def _passage(chunk: Chunk) -> str:
     if chunk.source != "prescription":
         return chunk.text
     note = "이 목록은 이 사람들이 받은 본운동 처방 전체다."
-    factor = "·".join(chunk.factors)
+    factor = ", ".join(chunk.factors)
     if factor:
         note += f" {factor}만을 위한 운동 목록이 아니다."
     return f"{chunk.text} ({note})"
@@ -106,6 +106,8 @@ def answer(question: str, age_group: str = "", profile_ref: str = "") -> dict[st
         written = " ".join(
             _extract(chunks[0].text, chunks[0].source, i + 1) for i, chunks in enumerate(groups[:2])
         )
+    # 코치 글에도, 자료에서 뽑은 문장에도 가운데 점과 대시가 섞여 온다. 화면에 내기 전에 바꾼다.
+    written = words.plain(written)
 
     problems = verify.check_answer(written, citations)
     if problems:

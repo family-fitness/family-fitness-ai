@@ -38,7 +38,7 @@ def check_proposal(proposal: dict[str, Any], age_groups: set[str]) -> list[str]:
         for text in texts:
             found = words.banned_words_in(text)
             if found:
-                problems.append(f"금지 어휘 {'·'.join(found)}")
+                problems.append(f"금지 어휘 {', '.join(found)}")
             for mark in _MARK.findall(text):
                 if int(mark) not in allowed:
                     problems.append(f"인용 범위 밖 [{mark}]")
@@ -71,5 +71,5 @@ def check_answer(answer: str, citations: list[dict[str, Any]]) -> list[str]:
         problems.append(f"인용 범위 밖 [{mark}]")
     found = words.banned_words_in(answer)
     if found:
-        problems.append(f"금지 어휘 {'·'.join(found)}")
+        problems.append(f"금지 어휘 {', '.join(found)}")
     return sorted(set(problems))

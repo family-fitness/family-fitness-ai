@@ -15,6 +15,7 @@ import re
 from dataclasses import dataclass
 from typing import Any
 
+from family_fitness_ai.common.copy import plain
 from family_fitness_ai.rag.index import Chunk
 from family_fitness_ai.rag.search import search
 from family_fitness_ai.video import catalog
@@ -115,7 +116,7 @@ def search_videos(
                 "score": hit.score,
                 "matched_exercise_names": matched,
                 "citation": {
-                    "label": hit.chunk.citation_label,
+                    "label": plain(hit.chunk.citation_label),
                     "chunk_id": hit.chunk.chunk_id,
                 },
             }
@@ -174,7 +175,7 @@ def kspo_hits(
                 "score": score,
                 "matched_exercise_names": matched,
                 "citation": {
-                    "label": chunk.citation_label if chunk else clip.citation_label,
+                    "label": plain(chunk.citation_label if chunk else clip.citation_label),
                     "chunk_id": chunk.chunk_id if chunk else f"kspo:{clip.video_id}",
                 },
             },

@@ -110,7 +110,7 @@ def test_prescriptions_with_the_same_label_share_one_citation():
     second = citations.add(_prescription("3"))
     assert first == second == 1
     assert [c["label"] for c in citations.dump()] == [
-        "국민체력100 운동처방 · 심폐지구력이 비슷한 유소년 11세"
+        "국민체력100 운동처방, 심폐지구력이 비슷한 유소년 11세"
     ]
 
 
@@ -186,7 +186,7 @@ def two_grades(monkeypatch: pytest.MonkeyPatch) -> list[list[tuple[int, str]]]:
 def test_the_answer_merges_citations_with_the_same_label(two_grades):
     result = coach_answer.answer("심폐지구력 운동", "유소년")
     assert [c["label"] for c in result["citations"]] == [
-        "국민체력100 운동처방 · 심폐지구력이 비슷한 유소년 11세"
+        "국민체력100 운동처방, 심폐지구력이 비슷한 유소년 11세"
     ]
     (passages,) = two_grades
     assert [number for number, _ in passages] == [1]

@@ -128,7 +128,7 @@ class Store:
 
         problems = verify.check_proposal(plan.proposal, age_groups)
         if problems:
-            run.steps = [*plan.steps[:3], Step(4, "verify", "failed", " · ".join(problems))]
+            run.steps = [*plan.steps[:3], Step(4, "verify", "failed", ", ".join(problems))]
             run.status = "refused"
             run.refused = True
             run.refusal_reason = "no_citation_generated"
@@ -137,7 +137,7 @@ class Store:
         citations = len(plan.proposal.get("citations") or [])
         run.steps = [
             *plan.steps[:3],
-            Step(4, "verify", "ok", f"인용 {citations}건 · 금지 어휘 0건"),
+            Step(4, "verify", "ok", f"인용 {citations}건, 금지 어휘 0건"),
         ]
         run.status = "succeeded"
         run.proposal = plan.proposal

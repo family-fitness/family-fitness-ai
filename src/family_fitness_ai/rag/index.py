@@ -16,7 +16,7 @@ from pathlib import Path
 import faiss
 import numpy as np
 
-from family_fitness_ai.common.copy import with_subject
+from family_fitness_ai.common.copy import plain, with_subject
 from family_fitness_ai.common.errors import temporarily_unavailable
 from family_fitness_ai.common.settings import settings
 
@@ -96,9 +96,11 @@ class Chunk:
     grade: str
 
     def citation(self, index: int) -> dict[str, object]:
+        # 인용 이름은 화면에 나간다. 원자료의 「국민체력100 운동처방 · …」 가운데 점을
+        # 쉼표로 바꿔 내보낸다. 묶을 때 쓰는 citation_label 은 원자료 그대로 둔다.
         return {
             "index": index,
-            "label": self.citation_label,
+            "label": plain(self.citation_label),
             "chunk_id": self.chunk_id,
             "url": self.citation_url or None,
         }

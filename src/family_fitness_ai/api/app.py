@@ -73,7 +73,7 @@ async def lifespan(_: FastAPI) -> AsyncIterator[None]:
     yield
 
 
-app = FastAPI(title="우리가족 체력키움 · AI", version="0.1.0", lifespan=lifespan)
+app = FastAPI(title="우리가족 체력키움 AI", version="0.1.0", lifespan=lifespan)
 v1 = APIRouter(prefix="/v1")
 
 

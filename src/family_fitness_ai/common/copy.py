@@ -1,7 +1,10 @@
 """화면에 나가는 문구.
 
 band·factor 같은 코드값은 화면에 나가지 않는다. 표시 문구는 전부 여기서 나온다.
-"부족"·"미달"·"하위"를 쓰지 않는다 — 아이가 읽는 화면이다.
+"부족", "미달", "하위"를 쓰지 않는다. 아이가 읽는 화면이다.
+
+가운데 점(·)과 긴 대시(—, –)도 쓰지 않는다. AI 가 쓴 티가 난다(사용자 결정). 여기
+적는 문구에 넣지 않고, 코치(LLM)나 원자료에서 들어온 글은 plain() 으로 바꿔 내보낸다.
 """
 
 from __future__ import annotations
@@ -9,8 +12,8 @@ from __future__ import annotations
 import re
 
 DISCLAIMER = (
-    "국민체력100 측정 데이터를 바탕으로 한 참고 정보입니다. "
-    "질병의 진단·치료를 위한 것이 아니며, 건강에 관한 판단은 전문가와 상담하세요."
+    "국민체력100 측정 결과로 만든 참고 정보입니다. "
+    "병을 진단하거나 치료하려고 쓰는 정보가 아니니, 건강이 걱정되면 전문가와 상담하세요."
 )
 
 TRAJECTORY_NOTICE = "집단 분포를 바탕으로 한 참고 범위입니다. 개인의 변화를 나타내지 않습니다."
@@ -73,7 +76,7 @@ def band_of(percentile: int | None) -> str | None:
 
 
 def with_topic(noun: str) -> str:
-    """받침을 보고 은/는을 붙인다. 「유연성은」 · 「자세는」."""
+    """받침을 보고 은/는을 붙인다. 「유연성은」, 「자세는」."""
     if not noun:
         return noun
     last = ord(noun[-1])
@@ -110,3 +113,35 @@ def factor_copy(factor: str, band: str) -> str:
 
 def banned_words_in(text: str) -> list[str]:
     return [w for w in BANNED_WORDS if w in text]
+
+
+#: 가운데 점으로 보이는 글자. 한글 자판의 「ㆍ」 와 일본식 「・」 도 화면에서는 같다.
+_DOTS = "·ㆍ・‧∙"
+#: 긴 대시로 보이는 글자. 붙임표(-)는 동작 이름(「T-W-Y-A」)에 쓰여 건드리지 않는다.
+_DASHES = "—–―‒"
+#: 「7–10세」 「3 — 5회」. 숫자 사이의 대시는 범위라 물결로 바꾼다.
+_RANGE = re.compile(rf"(\d)\s*[{_DASHES}]\s*(?=\d)")
+_MARK = re.compile(rf"\s*[{_DOTS}{_DASHES}]+\s*")
+#: 바꾸고 나서 쉼표가 문장부호나 괄호 앞에 붙거나 글 끝에 남은 것.
+_LOOSE_COMMA = re.compile(r",\s*(?=[,.!?)\]」』]|$)")
+_LEADING_COMMA = re.compile(r"(^|[(\[「『])\s*,\s*")
+#: 근거 번호([1]) 앞의 쉼표. 「늘여 봐요 — [1].」 은 「늘여 봐요 [1].」 이다.
+_COMMA_BEFORE_MARK = re.compile(r"\s*,\s*(?=\[\d+\])")
+
+
+def plain(text: str) -> str:
+    """가운데 점과 긴 대시를 걷어 낸 글.
+
+    숫자 사이의 대시는 범위라 물결(7~10세)로, 나머지 점과 대시는 쉼표로 바꾼다.
+    「국민체력100 운동처방동영상 · 걷기」 → 「국민체력100 운동처방동영상, 걷기」,
+    「편성은 끝났다 — 너는」 → 「편성은 끝났다, 너는」. 글 앞뒤나 문장부호 앞에 남는
+    쉼표는 뺀다.
+    """
+    if not text or not any(mark in text for mark in _DOTS + _DASHES):
+        return text
+    text = _RANGE.sub(r"\1~", text)
+    text = _MARK.sub(", ", text)
+    text = _COMMA_BEFORE_MARK.sub(" ", text)
+    text = _LOOSE_COMMA.sub("", text)
+    text = _LEADING_COMMA.sub(r"\1", text)
+    return text.strip()

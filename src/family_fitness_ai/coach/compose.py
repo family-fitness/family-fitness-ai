@@ -145,7 +145,8 @@ class Step:
             "seq": self.seq,
             "name": self.name,
             "status": self.status,
-            "summary": self.summary,
+            # 걸어 온 오류 문구(ApiError.message)도 여기로 온다. 화면에 나가니 한 번 더 바꾼다.
+            "summary": words.plain(self.summary),
         }
 
 
@@ -503,18 +504,18 @@ def _by_llm(
         "요청": (
             "자리마다 한 회씩 짠다. day_offset 은 그 자리 값이다. "
             f"day_offset 이 {WEEKLY_SLOT} 인 자리는 주간 미션으로, 그 주 안에 한 번 "
-            "길게 온 가족이 함께 한다 — 날짜를 정하지 않는다. "
-            "자리의 단계별_편수만큼만 고른다 — 화면에서 한 편을 여러 세트 반복해 "
+            "길게 온 가족이 함께 한다. 날짜는 정하지 않는다. "
+            "자리의 단계별_편수만큼만 고른다. 화면에서 한 편을 여러 세트 반복해 "
             "시간을 채우므로 영상 길이의 합을 분에 맞출 필요가 없다. "
-            "최근 이 true 인 클립은 이 사람이 요즘 받은 영상이다 — 같은 단계·요인의 다른 "
+            "최근 이 true 인 클립은 이 사람이 요즘 받은 영상이다. 단계와 요인이 같은 다른 "
             "클립이 모자랄 때만 고른다. 한 회 안에서는 영상 이 같은 클립을 둘 넘게 "
-            "고르지 않는다 — 다른 영상이 모자랄 때만 같은 영상을 다시 쓴다."
+            "고르지 않는다. 다른 영상이 모자랄 때만 같은 영상을 다시 쓴다."
             + (
-                f" 대상 요인 {read.factor} 은 보호자가 키워 주고 싶은 역량이다 — 본운동의 "
+                f" 대상 요인 {read.factor} 은 보호자가 키워 주고 싶은 역량이다. 본운동의 "
                 "4분의 3 이상(자리의 본운동_대상_요인_편수만큼)을 요인 이 "
                 f"{read.factor} 인 클립으로 고른다. 그런 클립이 모자라면 최근 이 true "
                 "이거나 같은 영상인 것이라도 이 요인을 먼저 고르고, 그래도 모자라면 다른 "
-                "요인으로 채운다. 준비운동 · 정리운동은 이 비율과 상관없다."
+                "요인으로 채운다. 준비운동과 정리운동은 이 비율과 상관없다."
                 if read.focused
                 else ""
             )
@@ -694,6 +695,9 @@ def _checked_text(
     out: dict[str, str] = {}
     for key, rule in fallback.items():
         value = written.get(key)
+        # 코치는 시켜도 가운데 점과 대시를 쓴다. 바꾼 글로 길이를 잰다.
+        if isinstance(value, str):
+            value = words.plain(value.strip())
         limit = coach_llm.LIMITS.get(key)
         fits = (
             isinstance(value, str)
@@ -783,7 +787,7 @@ def build(
     if not movers:
         return Plan(
             [
-                Step(1, "assess", "ok", "편성 대상이 없습니다 — 전원 응원"),
+                Step(1, "assess", "ok", "모두 응원하는 사람이라 편성할 사람이 없습니다"),
                 Step(2, "retrieve", "failed", "검색하지 않음"),
                 Step(3, "compose", "failed", "움직일 사람이 없어 중단"),
                 Step(4, "verify", "failed", "인용 0건"),
@@ -812,19 +816,19 @@ def build(
             if driver.percentile is not None
             else f"{driver.factor} {no_peer if focus_measured else '측정값 없음'}"
         )
-        assess_summary = f"{scored} · 대상 요인 = {driver.factor}({words.GUARDIAN_FOCUS})"
+        assess_summary = f"{scored}, 대상 요인 = {driver.factor}({words.GUARDIAN_FOCUS})"
     elif driver.percentile is not None:
         assess_summary = (
-            f"{driver.factor} 백분위 {driver.percentile} · "
+            f"{driver.factor} 백분위 {driver.percentile}, "
             f"대상 요인 = {driver.factor}({words.GROW_NOW})"
         )
     else:
         assess_summary = (
-            f"연령대 {driver.profile.age_group} · 만 {driver.profile.age}세 · "
+            f"연령대 {driver.profile.age_group}, 만 {driver.profile.age}세, "
             f"{no_peer if driver.rows else '측정값 없음'}"
         )
     if len(reads) > 1:
-        assess_summary += f" · 편성 대상 {len(reads)}명(측정 {len(measured)}명)"
+        assess_summary += f", 편성 대상 {len(reads)}명(측정 {len(measured)}명)"
     steps = [Step(1, "assess", "ok", assess_summary)]
 
     notices: list[str] = []
@@ -890,7 +894,7 @@ def build(
         clip_total += sum(len(mission["sessions"]) for mission in theirs)
 
     steps.append(
-        Step(2, "retrieve", "ok", f"처방 청크 {chunk_total}건 · 클립 후보 {len(catalog.clips())}개")
+        Step(2, "retrieve", "ok", f"처방 청크 {chunk_total}건, 클립 후보 {len(catalog.clips())}개")
     )
 
     if not missions or not citations:
@@ -901,12 +905,12 @@ def build(
         return Plan(steps, None, True, "no_citation_generated")
 
     how = "코치가" if by_llm else "규칙으로"
-    summary = f"미션 {len(missions)}건 · 클립 {clip_total}개 · {how} 편성"
+    summary = f"미션 {len(missions)}건, 클립 {clip_total}개, {how} 편성"
     # 코치의 편성을 손봤으면 그만큼 말한다.
     if tally.filled:
-        summary += f" · 목록에서 {tally.filled}편 채움"
+        summary += f", 목록에서 {tally.filled}편 채움"
     if tally.rewritten:
-        summary += f" · 문구 {tally.rewritten}칸 규칙으로"
+        summary += f", 문구 {tally.rewritten}칸 규칙으로"
     steps.append(Step(3, "compose", "ok" if by_llm else "partial", summary))
 
     proposal: dict[str, Any] = {
@@ -914,7 +918,7 @@ def build(
         "citations": citations.dump(),
     }
     if notices:
-        proposal["notices"] = sorted(set(notices))
+        proposal["notices"] = sorted({words.plain(notice) for notice in notices})
     return Plan(steps, proposal, False, None)
 
 
