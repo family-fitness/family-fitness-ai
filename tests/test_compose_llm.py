@@ -299,3 +299,15 @@ def test_a_child_with_no_measurement_is_still_called_unmeasured():
     bare = compose.RunProfile(ref="p_0", role="주행자", age=8, age_unit="세", sex="F")
     plan = compose.build([bare], date(2026, 9, 7), 1, compose.Constraints())
     assert "측정값 없음" in plan.steps[0].summary
+
+
+def test_widened_data_notices_speak_in_the_app_voice():
+    """「알려 드려요」 칸은 앱의 다른 글처럼 「~요」 로 끝난다. 「~썼습니다」 가 튀었다."""
+    notices = compose.read_profile(EIGHT, None).notices
+    notices += compose.read_profile(CHILD, "평형성").notices
+    _, pool_notice = catalog.pool("유아기", limit=100_000)
+    notices.append(pool_notice)
+    assert all(notices), notices
+    for notice in notices:
+        assert "습니다" not in notice, notice
+        assert notice.rstrip(".").endswith("요"), notice
