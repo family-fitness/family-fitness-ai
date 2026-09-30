@@ -219,6 +219,30 @@ def test_a_title_with_another_weekday_falls_back(monkeypatch: pytest.MonkeyPatch
     assert tally.rewritten == 1
 
 
+def test_a_title_that_names_the_reason_instead_of_the_factor_falls_back(
+    monkeypatch: pytest.MonkeyPatch,
+):
+    """「지금 키우기 좋은 영역」 · 「지금 키우기 좋은 유연성」 처럼 이유 문구가 제목에
+    요인 이름 대신 들어온 적이 있다. 그 칸만 규칙 제목으로."""
+
+    def plan(payload):
+        return [
+            _plan(0, _full(payload), title="지금 키우기 좋은 영역"),
+            _plan(2, _full(payload), title="지금 키우기 좋은 유연성"),
+        ]
+
+    missions, tally = _run(monkeypatch, plan, [_day(0), _day(2)])
+    assert missions[0]["title"] == "월요일 유연성 기르기"
+    assert missions[1]["title"] == "수요일 유연성 기르기"
+    assert tally.rewritten == 2
+
+
+def test_the_copy_writer_rejects_a_title_that_names_the_reason():
+    row = {"title": "보호자가 키워 주고 싶은 역량", "child": "같이 해 볼까요", "parent": "15분"}
+    assert not compose.coach_llm._acceptable(row)
+    assert compose.coach_llm._acceptable({**row, "title": "유연성 기르는 화요일"})
+
+
 def test_weekday_words_in_the_weekly_mission_fall_back(monkeypatch: pytest.MonkeyPatch):
     """주간은 그 주 안에 아무 때나 한다. 요일을 박은 글은 못 쓴다."""
 

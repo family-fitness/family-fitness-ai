@@ -34,6 +34,8 @@ SYSTEM = """너는 가족 운동 앱의 문구를 쓴다. 편성은 이미 끝�
 - 의학적 주장을 하지 않는다. 진단·치료·통증·체중을 말하지 않는다.
 - 이 말들을 쓰지 않는다: 부족, 미달, 하위, 비만, 저체중, 열등.
 - title 은 16자 이내, child 는 45자 이내, parent 는 70자 이내.
+- title 에는 대상 요인 이름(예: 유연성)을 쓴다. 대상_요인을_부르는_말은 title 에
+  쓰지 않는다.
 - 물음표로 끝나는 권유는 아이 문장에만 쓴다."""
 
 SCHEMA: dict[str, Any] = {
@@ -59,6 +61,15 @@ SCHEMA: dict[str, Any] = {
 
 LIMITS = {"title": 16, "child": 45, "parent": 70}
 
+#: 대상 요인을 고른 이유 문구에 들어가는 핵심 구절. 제목에 요인 이름 대신
+#: 들어오면 제목이 「지금 키우기 좋은 영역」 처럼 무엇을 하는지 읽히지 않는다.
+_REASON_STEMS = ("키우기 좋은", "키워 주고 싶은")
+
+
+def names_the_reason(title: str) -> bool:
+    """제목이 요인 이름 대신 이유 문구(words.GROW_NOW · words.GUARDIAN_FOCUS)를 쓰는지."""
+    return any(stem in title for stem in _REASON_STEMS)
+
 
 @dataclass
 class Written:
@@ -78,6 +89,8 @@ def _acceptable(row: dict[str, Any]) -> bool:
         if not isinstance(value, str) or not value.strip() or len(value) > limit:
             return False
         if words.banned_words_in(value):
+            return False
+        if key == "title" and names_the_reason(value):
             return False
     return True
 
@@ -202,6 +215,8 @@ PLAN_SYSTEM = """너는 가족 운동 코치다. 한 가족의 한 주 운동을
   보호자는 「보호자」라고 부른다. 엄마 · 아빠처럼 누구인지 짐작해 부르지 않는다.
 - 대상 체력요인을 부를 때는 대상_요인을_고른_까닭의 말을 그대로 쓴다.
   「지금 키우기 좋은 영역」 또는 「보호자가 키워 주고 싶은 역량」이다.
+  다만 title 에는 이 말을 쓰지 않고 요인 이름(예: 유연성)을 쓴다 — 16자 제목에
+  이유 문구가 들어가면 「지금 키우기 좋은 영역」 처럼 무엇을 하는지 읽히지 않는다.
   측정의 상태 말(「꾸준히 하고 있는 영역」 「잘하고 있는 영역」)은 그 요인의
   수준을 말할 때만 쓰고, 대상 요인을 부르는 데 쓰지 않는다.
 - reason 에는 왜 이렇게 짰는지 한두 문장을 쓰고, 근거 번호를 [1] 처럼 붙인다.

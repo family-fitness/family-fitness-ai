@@ -635,7 +635,8 @@ def _checked_text(
     """코치가 쓴 글을 칸마다 잰다. 어긋난 칸만 규칙 문구로 바꾼다.
 
     길이(title 16 · child 45 · parent 70)와 금지 어휘, 이 회에서 빠진 동작의
-    이름, 그리고 그 자리와 다른 요일(주간이면 어느 요일이든)을 본다. 프롬프트로
+    이름, 그 자리와 다른 요일(주간이면 어느 요일이든), 그리고 제목에 요인 이름
+    대신 들어온 이유 문구(「지금 키우기 좋은 영역」)를 본다. 프롬프트로
     시키지만 지켜지지 않았다 — 주간 parent 가 92자로 나간 적이 있다. 반쯤 고쳐 쓰지
     않는다. 그 칸을 통째로 바꾼다.
     """
@@ -650,6 +651,7 @@ def _checked_text(
             and not words.banned_words_in(value)
             and not any(name in value for name in dropped)
             and not any(day in value for day in _WEEKDAYS if day != weekday)
+            and not (key == "title" and coach_llm.names_the_reason(value))
         )
         if fits:
             out[key] = str(value)
