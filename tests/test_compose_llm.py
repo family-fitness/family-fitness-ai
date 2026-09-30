@@ -269,3 +269,33 @@ def test_a_focus_without_prescriptions_widens_the_factor_before_the_sex():
     ]
     assert all("-11-" in chunk.chunk_id for chunk in read.chunks)
     assert read.notices and "평형성" in read.notices[0]
+
+
+EIGHT = compose.RunProfile(
+    ref="p_8",
+    role="주행자",
+    age=8,
+    age_unit="세",
+    sex="F",
+    input_level="L2",
+    measurements={"028": 30.0, "012": 4.0, "020": 40, "022": 120, "009": 20},
+)
+
+
+def test_a_measured_child_without_peer_criteria_is_not_called_unmeasured():
+    """7–10세는 또래 기준이 없어 백분위가 비는 것이 정상이다(NO_CRITERIA). 일곱 항목을
+    잰 여덟 살의 편성 요약이 「측정값 없음」 이라고 적혔다."""
+    plan = compose.build([EIGHT], date(2026, 9, 7), 1, compose.Constraints())
+    assert "측정값 없음" not in plan.steps[0].summary
+    assert "또래 비교 기준 없음" in plan.steps[0].summary
+
+
+def test_a_measured_focus_without_peer_criteria_is_not_called_unmeasured():
+    plan = compose.build([EIGHT], date(2026, 9, 7), 1, compose.Constraints(focus_factor="유연성"))
+    assert "유연성 또래 비교 기준 없음" in plan.steps[0].summary
+
+
+def test_a_child_with_no_measurement_is_still_called_unmeasured():
+    bare = compose.RunProfile(ref="p_0", role="주행자", age=8, age_unit="세", sex="F")
+    plan = compose.build([bare], date(2026, 9, 7), 1, compose.Constraints())
+    assert "측정값 없음" in plan.steps[0].summary

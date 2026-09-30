@@ -746,11 +746,15 @@ def build(
     ]
     driver = next((r for r in reads if r.profile.role == "주행자"), reads[0])
     measured = [r for r in reads if r.percentile is not None]
+    # 잰 항목이 있는데 백분위가 비면 또래 기준이 없는 것이다(7–10세는 늘 그렇다).
+    # 「측정값 없음」은 잰 항목이 정말 없을 때만 쓴다.
+    no_peer = "또래 비교 기준 없음"
     if driver.focused:
+        focus_measured = any(row["factor"] == driver.factor for row in driver.rows)
         scored = (
             f"{driver.factor} 백분위 {driver.percentile}"
             if driver.percentile is not None
-            else f"{driver.factor} 측정값 없음"
+            else f"{driver.factor} {no_peer if focus_measured else '측정값 없음'}"
         )
         assess_summary = f"{scored} · 대상 요인 = {driver.factor}({words.GUARDIAN_FOCUS})"
     elif driver.percentile is not None:
@@ -760,7 +764,8 @@ def build(
         )
     else:
         assess_summary = (
-            f"연령대 {driver.profile.age_group} · 만 {driver.profile.age}세 · 측정값 없음"
+            f"연령대 {driver.profile.age_group} · 만 {driver.profile.age}세 · "
+            f"{no_peer if driver.rows else '측정값 없음'}"
         )
     if len(reads) > 1:
         assess_summary += f" · 편성 대상 {len(reads)}명(측정 {len(measured)}명)"
