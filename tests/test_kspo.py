@@ -415,6 +415,48 @@ def test_the_kind_beats_the_api_factor():
     assert {(r["fitness_factor"], r["phase"]) for r in rows} == {("심폐지구력", "본운동")}
 
 
+def test_a_prescription_video_borrows_the_kind_not_the_api_factor():
+    """운동처방동영상은 요인 칸이 없어 같은 이름의 가이드에서 빌린다. 가이드 설명에
+    갈래가 적혀 있으면 빌려 주는 요인도 그 갈래다 — API 가 「유연성」으로 적었어도."""
+    guide = dict(_case_row("가이드 · 요인·수준이 제 칸에"))
+    guide.update(
+        file_nm="X_guide.mp4",
+        trng_nm="빠르게 걷기",
+        vdo_ttl_nm="빠르게 걷기(3단계)",
+        ftns_fctr_nm="유연성",
+        vdo_desc="운동프로그램 중, 유산소운동에 해당하는 빠르게 걷기운동을 설명한 동영상",
+    )
+    video = next(r for r in FIXTURE["rows"][kspo.VIDEO_OP] if r.get("vdo_ttl_nm"))
+    video = dict(
+        video,
+        file_nm="X_video.mp4",
+        trng_nm="빠르게 걷기",
+        vdo_ttl_nm="빠르게 걷기",
+        vdo_desc="실내에서 할 수 있는 운동 중, 빠르게 걷기운동을 설명한 운동처방 동영상",
+    )
+    rows_by_op = {kspo.GUIDE: [guide], kspo.VIDEO_OP: [video]}
+    assert kspo.borrowed_from(rows_by_op)[kspo.join_key("빠르게 걷기")].factor == "심폐지구력"
+    rows = kspo.build(rows_by_op, {"X_guide.mp4": False, "X_video.mp4": True})
+    assert rows
+    assert {(r["fitness_factor"], r["phase"]) for r in rows} == {("심폐지구력", "본운동")}
+
+
+@needs_release
+@has_table
+def test_both_brisk_walking_videos_are_cardio_in_the_table():
+    """가이드 00601 과 처방동영상 00182 는 같은 「빠르게 걷기」다. 한쪽만 유연성으로
+    남으면 준비 · 정리 자리에 빠르게 걷기가 나간다."""
+    rows = list(csv.DictReader((settings().release_dir / kspo.OUT).open(encoding="utf-8")))
+    got: dict[str, set[tuple[str, str]]] = {"0AUDLJ08S_00182": set(), "0AUDLJ08S_00601": set()}
+    for r in rows:
+        if r["video_id"] in got:
+            got[r["video_id"]].add((r["fitness_factor"], r["phase"]))
+    assert got == {
+        "0AUDLJ08S_00182": {("심폐지구력", "본운동")},
+        "0AUDLJ08S_00601": {("심폐지구력", "본운동")},
+    }
+
+
 @needs_release
 @has_table
 def test_walking_and_push_ups_are_not_flexibility_in_the_table():

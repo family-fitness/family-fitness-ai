@@ -1,10 +1,8 @@
 video_id,seq,name_on_video,phase_on_video,start_sec,end_sec,duration_sec,exercise_name,fitness_factor,phase,is_exercise,home_ok,quiet,needs_props,source,score,age_group,level_lo,level_hi,sets,reps,hold,url,citation_label
 0AUDLJ08S_00181,1,걷기,,0,40,40,걷기,심폐지구력,본운동,True,False,True,False,kspo,1.0,성인,1,5,,,,https://openapi.kspo.or.kr/web/video/0AUDLJ08S_00181.mp4,국민체력100 운동처방동영상 · 걷기
 0AUDLJ08S_00181,1,걷기,,0,40,40,걷기,심폐지구력,본운동,True,False,True,False,kspo,1.0,청소년,1,5,,,,https://openapi.kspo.or.kr/web/video/0AUDLJ08S_00181.mp4,국민체력100 운동처방동영상 · 걷기
-0AUDLJ08S_00182,1,빠르게 걷기,,0,32,32,빠르게 걷기,유연성,정리운동,True,False,True,False,kspo,1.0,성인,3,3,,,,https://openapi.kspo.or.kr/web/video/0AUDLJ08S_00182.mp4,국민체력100 운동처방동영상 · 빠르게 걷기
-0AUDLJ08S_00182,1,빠르게 걷기,,0,32,32,빠르게 걷기,유연성,준비운동,True,False,True,False,kspo,1.0,성인,3,3,,,,https://openapi.kspo.or.kr/web/video/0AUDLJ08S_00182.mp4,국민체력100 운동처방동영상 · 빠르게 걷기
-0AUDLJ08S_00182,1,빠르게 걷기,,0,32,32,빠르게 걷기,유연성,정리운동,True,False,True,False,kspo,1.0,청소년,3,3,,,,https://openapi.kspo.or.kr/web/video/0AUDLJ08S_00182.mp4,국민체력100 운동처방동영상 · 빠르게 걷기
-0AUDLJ08S_00182,1,빠르게 걷기,,0,32,32,빠르게 걷기,유연성,준비운동,True,False,True,False,kspo,1.0,청소년,3,3,,,,https://openapi.kspo.or.kr/web/video/0AUDLJ08S_00182.mp4,국민체력100 운동처방동영상 · 빠르게 걷기
+0AUDLJ08S_00182,1,빠르게 걷기,,0,32,32,빠르게 걷기,심폐지구력,본운동,True,False,True,False,kspo,1.0,성인,3,3,,,,https://openapi.kspo.or.kr/web/video/0AUDLJ08S_00182.mp4,국민체력100 운동처방동영상 · 빠르게 걷기
+0AUDLJ08S_00182,1,빠르게 걷기,,0,32,32,빠르게 걷기,심폐지구력,본운동,True,False,True,False,kspo,1.0,청소년,3,3,,,,https://openapi.kspo.or.kr/web/video/0AUDLJ08S_00182.mp4,국민체력100 운동처방동영상 · 빠르게 걷기
 0AUDLJ08S_00183,1,달리기,,0,34,34,달리기,심폐지구력,본운동,True,False,False,False,kspo,1.0,성인,3,5,,,,https://openapi.kspo.or.kr/web/video/0AUDLJ08S_00183.mp4,국민체력100 운동처방동영상 · 달리기
 0AUDLJ08S_00183,1,달리기,,0,34,34,달리기,심폐지구력,본운동,True,False,False,False,kspo,1.0,청소년,3,5,,,,https://openapi.kspo.or.kr/web/video/0AUDLJ08S_00183.mp4,국민체력100 운동처방동영상 · 달리기
 0AUDLJ08S_00185,1,줄넘기,,0,46,46,줄넘기,심폐지구력,본운동,True,True,False,True,kspo,1.0,성인,3,5,,,,https://openapi.kspo.or.kr/web/video/0AUDLJ08S_00185.mp4,국민체력100 운동처방동영상 · 줄넘기

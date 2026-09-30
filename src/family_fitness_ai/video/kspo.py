@@ -217,7 +217,7 @@ def _most(rows: list[dict[str, Any]], key: str) -> str:
 
 @dataclass(frozen=True)
 class Borrowed:
-    """다른 조회가 같은 운동명에 붙인 값. 공단 원문 그대로 둔다."""
+    """다른 조회가 같은 운동명에 붙인 값. 공단 원문 그대로 둔다(요인만 설명의 갈래가 먼저)."""
 
     factor: str
     level: str
@@ -229,6 +229,7 @@ def borrowed_from(rows_by_op: dict[str, list[dict[str, Any]]]) -> dict[str, Borr
 
     한 영상은 한 조회에만 들어서 영상으로는 이을 수 없다. 운동명으로 잇는다.
     요인은 가이드가 먼저고 없으면 루틴, 수준은 가이드, 단계는 표준운동·루틴이다.
+    가이드 설명에 갈래(KINDS)가 적혀 있으면 요인은 원문 대신 그 갈래의 요인이다.
     """
     guide_factor: dict[str, collections.Counter[str]] = collections.defaultdict(collections.Counter)
     routine_factor: dict[str, collections.Counter[str]] = collections.defaultdict(
@@ -242,6 +243,10 @@ def borrowed_from(rows_by_op: dict[str, list[dict[str, Any]]]) -> dict[str, Borr
             if not key:
                 continue
             factor = (row.get("ftns_fctr_nm") or "").strip()
+            if op == GUIDE and (kind := kind_factors(row.get("vdo_desc") or "")):
+                # 가이드 설명에 갈래가 있으면 _video 와 같이 그쪽이 먼저다. 그래야 빌려
+                # 가는 처방동영상(빠르게 걷기 00182)이 가이드(00601)와 어긋나지 않는다.
+                factor = kind[0]
             if factor and op == GUIDE:
                 guide_factor[key][factor] += 1
             elif factor and op == ROUTINE:
