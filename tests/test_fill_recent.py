@@ -9,6 +9,9 @@
 
 from __future__ import annotations
 
+import collections
+from datetime import date, timedelta
+
 from family_fitness_ai.coach import compose
 from family_fitness_ai.video import catalog
 
@@ -84,3 +87,39 @@ def test_one_video_fills_several_slots_when_there_is_nothing_else():
     same = [_clip("gOrg8Lva-8A", f"동작{n}", start=n * 60) for n in range(3)]
     chosen = compose._fill(_offered(main=same[:1]), same, WANT, set(), compose.Tally())
     assert len(chosen) == 3
+
+
+def test_an_all_recent_phase_does_not_give_the_same_clip_every_day():
+    """유아기 정리운동 후보 일곱이 모두 한 영상(gOrg8Lva-8A)에서 나온다. 그 영상이 늘
+    최근이라 순서가 그대로 남아 14일 중 13일 같은 클립이 나왔다. 코치가 날마다 같은
+    클립을 골라도 날짜로 섞어 돌린다."""
+    cool = [_clip("gOrg8Lva-8A", f"스트레칭{n}", "정리운동", n * 30) for n in range(7)]
+    want = {"준비운동": 0, "본운동": 0, "정리운동": 1}
+    days = []
+    for n in range(14):
+        chosen = compose._fill(
+            _offered(cool=cool[:1]),
+            cool,
+            want,
+            set(),
+            compose.Tally(),
+            recent=frozenset({"gOrg8Lva-8A"}),
+            seed=(date(2026, 9, 30) + timedelta(days=n)).isoformat(),
+        )
+        days.append(chosen[0][1].name)
+    assert max(collections.Counter(days).values()) <= 4
+    assert len(set(days)) >= 4
+
+
+def test_an_all_recent_phase_in_the_rule_order_moves_with_the_date():
+    cool = [_clip("gOrg8Lva-8A", f"스트레칭{n}", "정리운동", n * 30) for n in range(7)]
+    days = [
+        catalog._defer_recent(
+            cool,
+            "",
+            frozenset({"gOrg8Lva-8A"}),
+            (date(2026, 9, 30) + timedelta(days=n)).isoformat(),
+        )[0].name
+        for n in range(14)
+    ]
+    assert max(collections.Counter(days).values()) <= 4

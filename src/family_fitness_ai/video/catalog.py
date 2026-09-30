@@ -250,7 +250,7 @@ def _rank(
     return score, abs(clip.duration_sec - SET_SECONDS)
 
 
-def _shuffle(clip: Clip, seed: str) -> str:
+def shuffle_key(clip: Clip, seed: str) -> str:
     """같은 순위끼리의 차례. 시드(편성 시작일)가 바뀌면 바뀌고, 같으면 늘 같다.
 
     BE 는 하루씩 편성을 부른다. 순위만으로 고르면 같은 아이 · 같은 조건에 날마다 같은
@@ -278,20 +278,26 @@ def _age_rank(
             score,
             int(clip.age_group != age_group),
             distance // 30,
-            _shuffle(clip, seed),
+            shuffle_key(clip, seed),
             distance,
         )
 
     return rank
 
 
-def _defer_recent(ranked: list[Clip], factor: str, recent: frozenset[str]) -> list[Clip]:
+def _defer_recent(
+    ranked: list[Clip], factor: str, recent: frozenset[str], seed: str = ""
+) -> list[Clip]:
     """최근에 받은 영상을 뒤로 미룬다. 빼지는 않는다.
 
     단계마다 따로 본다. 대상 요인에 맞는 최근 영상은 같은 요인의 새 후보가 다 선
     뒤에, 요인이 다른 최근 영상은 그 단계 맨 뒤에 선다. 새 후보가 모자라면 그대로
     다시 쓰인다. 단계가 서 있던 자리는 바꾸지 않는다 — 목록을 자르는 곳(pool 의
     limit)에서 단계별 몫이 달라지지 않게.
+
+    한 단계의 후보가 모두 최근 영상이면 순위 대신 seed 로 섞는다. 유아기 정리운동
+    후보 일곱은 모두 한 영상에서 나와 늘 최근이다. 순위대로 두면 점수가 가장 높은
+    클립이 날마다 맨 앞에 섰다(14일 중 13일).
     """
     if not recent:
         return ranked
@@ -301,6 +307,12 @@ def _defer_recent(ranked: list[Clip], factor: str, recent: frozenset[str]) -> li
         group = [ranked[i] for i in places]
         matches = [not factor or clip.fitness_factor == factor for clip in group]
         fresh = [c for c in group if c.video_id not in recent]
+        if not fresh and seed:
+            for place, clip in zip(
+                places, sorted(group, key=lambda c: shuffle_key(c, seed)), strict=True
+            ):
+                out[place] = clip
+            continue
         stale_match = [c for c, m in zip(group, matches, strict=True) if m and c.video_id in recent]
         stale_other = [
             c for c, m in zip(group, matches, strict=True) if not m and c.video_id in recent
@@ -360,7 +372,7 @@ def routine(
         if candidates and all(clip.title in used for clip in candidates):
             # 뺄 것을 빼고 나니 남는 게 없다. 그 단계만 처음으로 되돌린다.
             used -= {clip.title for clip in candidates}
-        for clip in _defer_recent(sorted(candidates, key=rank), factor, recent):
+        for clip in _defer_recent(sorted(candidates, key=rank), factor, recent, seed):
             if clip.title in used:
                 continue
             picked[phase].append(clip)
@@ -400,8 +412,8 @@ def pool(
     same = [clip for clip in fitting if clip.age_group in ages]
     other = [clip for clip in fitting if clip.age_group not in ages]
     rank = _age_rank(age_group, factor, prescribed, level, seed)
-    same = _defer_recent(sorted(same, key=rank), factor, recent)
-    other = _defer_recent(sorted(other, key=rank), factor, recent)
+    same = _defer_recent(sorted(same, key=rank), factor, recent, seed)
+    other = _defer_recent(sorted(other, key=rank), factor, recent, seed)
     # 또래가 모자란지는 합치기 전 클립 수로 본다. 합친 뒤의 수로 보면 조건을 켠
     # 유소년·성인이 60 밑으로 내려가, 전에 없던 다른 연령대가 섞이고 알림이 뜬다.
     short = len(same) < limit // 2

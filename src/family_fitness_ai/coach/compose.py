@@ -515,7 +515,15 @@ def _by_llm(
         if not any(offered.values()):
             continue
 
-        chosen = _fill(offered, pool, catalog.clip_counts(slot.minutes), week, tally, recent)
+        chosen = _fill(
+            offered,
+            pool,
+            catalog.clip_counts(slot.minutes),
+            week,
+            tally,
+            recent,
+            start_date.isoformat(),
+        )
         week |= {clip.title for _, clip in chosen}
         # 코치가 골랐는데 이 회에서 빠진 동작. 글에 그 이름이 남아 있으면 못 쓴다.
         picked = {clip.title for clips in offered.values() for clip in clips}
@@ -552,6 +560,7 @@ def _fill(
     week: set[str],
     tally: Tally,
     recent: frozenset[str] = frozenset(),
+    seed: str = "",
 ) -> list[tuple[str, catalog.Clip]]:
     """단계마다 정한 편수를 채운다.
 
@@ -564,6 +573,10 @@ def _fill(
     한 회 안에서 한 영상이 여러 칸을 채우지 않게, 먼저 그 회에 아직 없는 영상으로만
     채우고 모자라면 그때 같은 영상의 다른 클립을 쓴다. 한 영상의 클립이 일곱 칸 중
     다섯 칸을 채운 적이 있다. 후보가 한 영상뿐이면(유아기) 그대로 다시 쓴다.
+
+    한 단계의 후보가 모두 헌 것이면 코치가 고른 것을 앞세우지 않고 seed(편성
+    시작일)로 섞는다. 유아기 정리운동 후보 일곱이 모두 한 영상에서 나와 늘 최근이라,
+    코치가 날마다 고르는 같은 클립이 14일 중 13일 나왔다.
     """
     chosen: list[tuple[str, catalog.Clip]] = []
     today: set[str] = set()
@@ -571,10 +584,12 @@ def _fill(
     # 코치가 그날 고른 동작은 목록에서 채울 때 건드리지 않는다. 늘리는 동작은 준비·정리
     # 두 단계에 다 있어서, 앞 단계를 채우다 코치가 뒤 단계에 둔 것을 먼저 가져간 적이 있다.
     reserved = {clip.title for clips in offered.values() for clip in clips}
-    # 영상도 같다. 목록에서 채우다 코치가 뒤 단계에 둔 영상의 다른 클립을 먼저 넣으면,
-    # 뒤 단계에서 코치가 고른 것이 「이미 나온 영상」 이 되어 밀려난다.
-    reserved_videos = {clip.video_id for clips in offered.values() for clip in clips}
-    for phase in catalog.PHASES:
+    # 영상도 같다(reserved_videos). 목록에서 채우다 코치가 뒤 단계에 둔 영상의 다른
+    # 클립을 먼저 넣으면, 뒤 단계에서 코치가 고른 것이 「이미 나온 영상」 이 되어 밀려난다.
+    for index, phase in enumerate(catalog.PHASES):
+        reserved_videos = {
+            clip.video_id for later in catalog.PHASES[index + 1 :] for clip in offered[later]
+        }
         picked = offered[phase]
         spare = [clip for clip in pool if clip.phase == phase and clip.title not in reserved]
 
@@ -587,6 +602,8 @@ def _fill(
             + [clip for clip in picked if worn(clip)]
             + [clip for clip in spare if worn(clip)]
         )
+        if seed and order and all(worn(clip) for clip in order):
+            order.sort(key=lambda clip: (clip.title in week, catalog.shuffle_key(clip, seed)))
         count = 0
         for other_videos_only in (True, False):
             for clip in order:
