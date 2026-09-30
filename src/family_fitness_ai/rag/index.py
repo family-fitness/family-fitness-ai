@@ -16,7 +16,7 @@ from pathlib import Path
 import faiss
 import numpy as np
 
-from family_fitness_ai.common.copy import plain, with_subject
+from family_fitness_ai.common.copy import plain, video_title, with_subject
 from family_fitness_ai.common.errors import temporarily_unavailable
 from family_fitness_ai.common.settings import settings
 
@@ -95,12 +95,24 @@ class Chunk:
     factors: tuple[str, ...]
     grade: str
 
+    def label(self) -> str:
+        """화면에 나가는 근거 이름.
+
+        원자료의 「국민체력100 운동처방 · …」 가운데 점을 쉼표로 바꾼다. 유튜브 영상은
+        「국민체력100 운동영상 · <유튜브 제목>」 이라 제목에서 이모지와 앞쪽 대괄호
+        머리말을 걷고 「(30min)」 을 「(30분)」 으로 바꾼다. 묶을 때 쓰는 citation_label 은
+        원자료 그대로 둔다.
+        """
+        if self.source == "video":
+            head, dot, title = self.citation_label.partition(" · ")
+            if dot:
+                return f"{plain(head)}, {plain(video_title(title))}"
+        return plain(self.citation_label)
+
     def citation(self, index: int) -> dict[str, object]:
-        # 인용 이름은 화면에 나간다. 원자료의 「국민체력100 운동처방 · …」 가운데 점을
-        # 쉼표로 바꿔 내보낸다. 묶을 때 쓰는 citation_label 은 원자료 그대로 둔다.
         return {
             "index": index,
-            "label": plain(self.citation_label),
+            "label": self.label(),
             "chunk_id": self.chunk_id,
             "url": self.citation_url or None,
         }

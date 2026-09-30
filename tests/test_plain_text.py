@@ -276,3 +276,47 @@ def test_assessment_and_trajectory_text_have_no_dots() -> None:
     child = Profile("p", 11, "세", "F", 148.0, 41.0, {"028": 41.3, "020": 70, "009": 30})
     assert _marked(assessment(child)) == []
     assert _marked(trajectory(child, "028", 3)) == []
+
+
+# ── 유튜브 영상 근거 이름 ─────────────────────────────────────────────────
+
+
+@pytest.mark.parametrize(
+    ("title", "after"),
+    [
+        (
+            "[👦🏻유소년] 성장기 학생들을 위한 체력향상 운동프로그램 (30min)",
+            "성장기 학생들을 위한 체력향상 운동프로그램(30분)",
+        ),
+        (
+            "🦖유아기 체력 향상 (복합운동) | EP03.알록달록 붙여요! (20miin)",
+            "유아기 체력 향상 (복합운동), EP03.알록달록 붙여요!(20분)",
+        ),
+        (
+            "[성인/1주차] 딱 4주만 같이 해봐요💪｜1주일만 해도 체지방 쫙!",
+            "딱 4주만 같이 해봐요, 1주일만 해도 체지방 쫙!",
+        ),
+        ("🦖유아기 복합 지각능력  향상 활동", "유아기 복합 지각능력 향상 활동"),
+        ("[유소년]", "[유소년]"),
+    ],
+)
+def test_video_titles_lose_emoji_bracket_heads_and_min(title: str, after: str) -> None:
+    assert words.video_title(title) == after
+
+
+def test_a_youtube_citation_is_named_like_the_rule_planner() -> None:
+    chunk = Chunk(
+        chunk_id="video:abc",
+        source="video",
+        text="",
+        citation_label=(
+            "국민체력100 운동영상 · [👦🏻유소년] 성장기 학생들을 위한 체력향상 운동프로그램 (30min)"
+        ),
+        citation_url="https://www.youtube.com/watch?v=abc",
+        age_group="유소년",
+        factors=(),
+        grade="",
+    )
+    assert chunk.citation(1)["label"] == (
+        "국민체력100 운동영상, 성장기 학생들을 위한 체력향상 운동프로그램(30분)"
+    )

@@ -10,6 +10,7 @@ band·factor 같은 코드값은 화면에 나가지 않는다. 표시 문구는
 from __future__ import annotations
 
 import re
+import unicodedata
 
 DISCLAIMER = (
     "국민체력100 측정 결과로 만든 참고 정보입니다. "
@@ -148,3 +149,29 @@ def plain(text: str) -> str:
     text = _LOOSE_COMMA.sub("", text)
     text = _LEADING_COMMA.sub(r"\1", text)
     return text.strip()
+
+
+#: 이모지와 피부색, 이음 글자. 「👦🏻」 「👩🏻‍🎓」 는 여러 글자가 붙은 한 그림이다.
+_EMOJI_JOINERS = re.compile("[\U0001f3fb-\U0001f3ff\u200d\ufe0f]")
+_LEADING_BRACKET = re.compile(r"^\s*\[[^\]]*\]\s*")
+_VERTICAL_BAR = re.compile(r"\s*[|｜]\s*")
+#: 「(30min)」. 원제목에 「(20miin)」 처럼 잘못 친 것도 있다.
+_MINUTES = re.compile(r"\s*\(\s*(\d+)\s*mi+n\s*\)", re.IGNORECASE)
+_SPACES = re.compile(r"\s{2,}")
+
+
+def video_title(title: str) -> str:
+    """유튜브 제목을 화면에 내보낼 근거 이름으로 다듬는다.
+
+    BE 규칙 편성의 youtubeCitationTitle 과 같은 손질이다. 이모지와 앞쪽 대괄호
+    머리말(「[👦🏻유소년]」)을 걷고, 세로 막대는 쉼표로, 「(30min)」 은 「(30분)」 으로
+    바꾼다. 머리말을 걷고 남는 글이 없으면 머리말을 그대로 둔다.
+    """
+    cleaned = "".join(ch for ch in title if unicodedata.category(ch) != "So")
+    cleaned = _EMOJI_JOINERS.sub("", cleaned)
+    without_head = _LEADING_BRACKET.sub("", cleaned, count=1)
+    if without_head.strip():
+        cleaned = without_head
+    cleaned = _VERTICAL_BAR.sub(", ", cleaned)
+    cleaned = _MINUTES.sub(r"(\1분)", cleaned)
+    return _SPACES.sub(" ", cleaned).strip()

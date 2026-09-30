@@ -116,7 +116,7 @@ def search_videos(
                 "score": hit.score,
                 "matched_exercise_names": matched,
                 "citation": {
-                    "label": plain(hit.chunk.citation_label),
+                    "label": hit.chunk.label(),
                     "chunk_id": hit.chunk.chunk_id,
                 },
             }
