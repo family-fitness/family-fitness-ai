@@ -16,6 +16,9 @@ data/release/video_clips.csv 를 만든다. 유튜브에 다시 가지 않는다
 셋을 가르는 것은 **얼마나 오래 떠 있느냐**다. 영상 내내면 배너, 두어 칸이면
 해설, 그 사이가 이름이다. OCR 이 흔들려 같은 글자가 조금씩 다르게 읽히므로
 비슷한 글자는 하나로 모은다.
+
+사람이 화면을 보고 고친 시작 · 끝(data/release/clip_times.csv)은 표를 만들 때마다
+그 위에 덮어쓴다. 고친 값이 다시 돌릴 때 사라지지 않게 하려는 것이다.
 """
 
 from __future__ import annotations
@@ -27,7 +30,8 @@ import csv
 import difflib
 import json
 import re
-from dataclasses import dataclass
+from collections.abc import Iterable
+from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import Any
 
@@ -83,6 +87,66 @@ class Clip:
     @property
     def duration_sec(self) -> int:
         return self.end_sec - self.start_sec
+
+
+#: 사람이 고친 시작 · 끝을 적어 두는 표. 화면 글자는 2초마다 읽어서 끊은 자리가 앞뒤로
+#: 몇 초씩 어긋나고, 이름표가 뜨기 전의 설명이나 다음 동작의 앞머리가 섞이기도 한다.
+#: video_clips.csv 만 고치면 이 모듈을 다시 돌릴 때 사라지니 따로 둔다.
+#: 적는 쪽은 src/script/label_clips.py 다.
+EDITS = "clip_times.csv"
+EDIT_FIELDS = ("video_id", "seq", "name_on_video", "start_sec", "end_sec")
+
+
+@dataclass(frozen=True)
+class Edit:
+    video_id: str
+    seq: int
+    name: str
+    start_sec: int
+    end_sec: int
+
+
+def read_edits(out_dir: Path) -> list[Edit]:
+    path = out_dir / EDITS
+    if not path.exists():
+        return []
+    with path.open(encoding="utf-8", newline="") as fh:
+        return [
+            Edit(
+                row["video_id"],
+                int(row["seq"]),
+                row["name_on_video"],
+                int(row["start_sec"]),
+                int(row["end_sec"]),
+            )
+            for row in csv.DictReader(fh)
+        ]
+
+
+def write_edits(out_dir: Path, edits: Iterable[Edit]) -> None:
+    """영상 · 차례 순으로 쓴다. 고친 차례대로 쓰면 같은 내용도 줄 순서가 달라진다."""
+    with (out_dir / EDITS).open("w", newline="", encoding="utf-8") as fh:
+        writer = csv.writer(fh, lineterminator="\n")
+        writer.writerow(EDIT_FIELDS)
+        for edit in sorted(edits, key=lambda e: (e.video_id, e.seq)):
+            writer.writerow([edit.video_id, edit.seq, edit.name, edit.start_sec, edit.end_sec])
+
+
+def apply_edits(clips: list[Clip], edits: Iterable[Edit]) -> tuple[list[Clip], list[Edit]]:
+    """고친 시각을 덮어쓴다. 덮을 클립을 못 찾은 것은 따로 돌려준다.
+
+    영상 · 차례 · 이름이 모두 같아야 같은 클립이다. 끊는 규칙이 바뀌어 차례가 밀리면
+    차례만 보고는 다른 운동에 시각을 덮어쓰게 된다.
+    """
+    wanted = {(edit.video_id, edit.seq): edit for edit in edits}
+    out: list[Clip] = []
+    for clip in clips:
+        edit = wanted.get((clip.video_id, clip.seq))
+        if edit is not None and edit.name == clip.name:
+            del wanted[(clip.video_id, clip.seq)]
+            clip = replace(clip, start_sec=edit.start_sec, end_sec=edit.end_sec)
+        out.append(clip)
+    return out, sorted(wanted.values(), key=lambda e: (e.video_id, e.seq))
 
 
 #: 「01. 」 「#」 같은 앞머리. 화면에는 뜨지만 운동 이름은 아니다.
@@ -335,6 +399,14 @@ def build(raw_dir: Path, out_dir: Path) -> list[Clip]:
     clips: list[Clip] = []
     for video_id, screen in sorted(screens.items()):
         clips.extend(clips_of_video(video_id, screen))
+
+    clips, lost = apply_edits(clips, read_edits(out_dir))
+    for edit in lost:
+        # 조용히 버리지 않는다. 사람이 본 값이라 다시 맞춰 볼 것이 남았다는 뜻이다.
+        print(
+            f"고친 시각을 덮을 클립이 없다: {edit.video_id} #{edit.seq} {edit.name} "
+            f"({edit.start_sec}~{edit.end_sec}초) — {EDITS} 를 본다"
+        )
 
     path = out_dir / "video_clips.csv"
     with path.open("w", newline="", encoding="utf-8") as fh:

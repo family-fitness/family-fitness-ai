@@ -129,3 +129,87 @@ def test_clip_counts_grow_with_the_session_but_stay_followable():
     assert clip_counts(15) == {"준비운동": 2, "본운동": 4, "정리운동": 1}
     assert sum(clip_counts(10).values()) < sum(clip_counts(30).values())
     assert sum(clip_counts(60).values()) <= 12
+
+
+def _three_clips() -> list:
+    from family_fitness_ai.video.clips import Clip
+
+    return [
+        Clip("vid", 1, "거북이 스트레칭", "", 6, 78),
+        Clip("vid", 2, "캐치볼을 해요", "본운동", 78, 140),
+        Clip("other", 1, "캐치볼을 해요", "본운동", 10, 60),
+    ]
+
+
+def test_a_human_time_replaces_what_the_screen_text_gave():
+    from family_fitness_ai.video.clips import Edit, apply_edits
+
+    clips, lost = apply_edits(_three_clips(), [Edit("vid", 2, "캐치볼을 해요", 80, 132)])
+    assert lost == []
+    assert [(c.start_sec, c.end_sec, c.duration_sec) for c in clips] == [
+        (6, 78, 72),
+        (80, 132, 52),
+        (10, 60, 50),  # 이름이 같아도 다른 영상의 클립은 그대로다
+    ]
+
+
+def test_a_human_time_is_not_laid_over_a_different_exercise():
+    # 끊는 규칙이 바뀌어 차례가 밀리면 2번이 다른 운동이 된다. 차례만 보고 덮으면
+    # 사람이 본 적 없는 운동에 시각이 들어간다. 덮지 않고, 못 덮었다고 돌려준다.
+    from family_fitness_ai.video.clips import Edit, apply_edits
+
+    stale = Edit("vid", 2, "개구리 점프해요", 80, 132)
+    gone = Edit("vid", 7, "캐치볼을 해요", 300, 340)
+    clips, lost = apply_edits(_three_clips(), [gone, stale])
+    assert clips == _three_clips()
+    assert lost == [stale, gone]
+
+
+def test_human_times_are_written_in_one_order_whatever_order_they_were_made(tmp_path: Path):
+    from family_fitness_ai.video.clips import Edit, read_edits, write_edits
+
+    edits = [
+        Edit("vid", 2, "캐치볼을 해요", 80, 132),
+        Edit("other", 1, "어깨, 등 스트레칭", 12, 58),
+    ]
+    write_edits(tmp_path, edits)
+    first = (tmp_path / "clip_times.csv").read_bytes()
+    write_edits(tmp_path, reversed(edits))
+    assert (tmp_path / "clip_times.csv").read_bytes() == first
+    assert read_edits(tmp_path) == sorted(edits, key=lambda e: (e.video_id, e.seq))
+
+
+def test_no_human_times_is_not_an_error(tmp_path: Path):
+    from family_fitness_ai.video.clips import read_edits
+
+    assert read_edits(tmp_path) == []
+
+
+def test_rebuilding_the_table_keeps_the_human_times(tmp_path: Path, monkeypatch, capsys):
+    # make clips 는 video_clips.csv 를 새로 쓴다. 사람이 고친 시각은 그 위에 다시 덮인다.
+    from family_fitness_ai.video import clips as module
+    from family_fitness_ai.video.clips import Edit, write_edits
+
+    found = _three_clips()
+    monkeypatch.setattr(module, "read_screens", lambda raw_dir: {"vid": {}, "other": {}})
+    monkeypatch.setattr(
+        module,
+        "clips_of_video",
+        lambda video_id, screen: [c for c in found if c.video_id == video_id],
+    )
+    write_edits(
+        tmp_path, [Edit("vid", 2, "캐치볼을 해요", 80, 132), Edit("vid", 5, "없는 운동", 1, 9)]
+    )
+
+    built = module.build(tmp_path, tmp_path)
+
+    assert [(c.video_id, c.seq, c.start_sec, c.end_sec) for c in built] == [
+        ("other", 1, 10, 60),
+        ("vid", 1, 6, 78),
+        ("vid", 2, 80, 132),
+    ]
+    assert "vid,2,캐치볼을 해요,본운동,80,132,52\n" in (tmp_path / "video_clips.csv").read_text(
+        encoding="utf-8"
+    )
+    # 덮을 클립이 사라진 것은 조용히 버리지 않는다.
+    assert "vid #5 없는 운동" in capsys.readouterr().out
