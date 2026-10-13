@@ -1,0 +1,554 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>클립 라벨 고치기</title>
+<style>
+/* src/script/label_clips.py 가 띄우는 화면. 이 PC 에서만 쓰는 도구라 밖의 글꼴이나 라이브러리를 받지 않는다. */
+:root {
+  --bg: #f4f6f5; --panel: #ffffff; --line: #d9e0de; --ink: #1b2826; --muted: #5d6b68;
+  --accent: #1f6f5c; --accent-ink: #ffffff; --accent-soft: #e2f1ec;
+  --warn: #9a5a12; --warn-soft: #fbefe2; --bad: #b3261e;
+  --font: -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", "Malgun Gothic", "Noto Sans KR", sans-serif;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #121817; --panel: #1b2422; --line: #2f3b38; --ink: #e6eeeb; --muted: #9db0ab;
+    --accent: #5fc2a7; --accent-ink: #0d1614; --accent-soft: #1f3a33;
+    --warn: #e5b073; --warn-soft: #3a2c1a; --bad: #ff8a80;
+  }
+}
+* { box-sizing: border-box; }
+html, body { height: 100%; }
+body { margin: 0; background: var(--bg); color: var(--ink); font: 14px/1.5 var(--font); }
+button, input, select { font: inherit; color: inherit; }
+.app { display: grid; grid-template-rows: auto 1fr; height: 100%; }
+
+header { display: flex; flex-wrap: wrap; align-items: center; gap: 12px 20px; padding: 10px 16px;
+  background: var(--panel); border-bottom: 1px solid var(--line); }
+h1 { font-size: 16px; margin: 0; }
+.progress { color: var(--muted); font-variant-numeric: tabular-nums; }
+.progress b { color: var(--ink); }
+.bar { width: 140px; height: 6px; border-radius: 3px; background: var(--line); overflow: hidden; }
+.bar i { display: block; height: 100%; background: var(--accent); }
+.filters { display: flex; flex-wrap: wrap; gap: 8px; margin-left: auto; }
+.filters input, .filters select, .field input[type=text], .field select {
+  height: 32px; padding: 0 10px; border: 1px solid var(--line); border-radius: 6px; background: var(--panel); }
+.filters input { width: 200px; }
+
+main { display: grid; grid-template-columns: 300px minmax(0, 1fr) 340px; min-height: 0; }
+.list { overflow-y: auto; border-right: 1px solid var(--line); background: var(--panel); }
+.list button { display: grid; gap: 2px; width: 100%; padding: 8px 14px; text-align: left; border: 0;
+  border-bottom: 1px solid var(--line); background: none; cursor: pointer; }
+.list button:hover { background: var(--bg); }
+.list button[aria-current=true] { background: var(--accent-soft); box-shadow: inset 3px 0 0 var(--accent); }
+.list .name { font-weight: 600; overflow-wrap: anywhere; }
+.tags { display: flex; flex-wrap: wrap; gap: 4px; font-size: 12px; color: var(--muted); }
+.tag { padding: 0 6px; border-radius: 4px; background: var(--bg); }
+.tag.human { background: var(--accent-soft); color: var(--accent); }
+.tag.empty { background: var(--warn-soft); color: var(--warn); }
+.none { padding: 24px 16px; color: var(--muted); }
+
+.stage { overflow-y: auto; padding: 16px; display: grid; gap: 12px; align-content: start; }
+.player { aspect-ratio: 16 / 9; width: 100%; max-height: 62vh; background: #000; border-radius: 8px; overflow: hidden; }
+.player iframe { width: 100%; height: 100%; border: 0; display: block; }
+.player .blank { display: grid; place-items: center; height: 100%; color: #cfd8d6; padding: 24px; text-align: center; }
+.clips { display: flex; flex-wrap: wrap; gap: 6px; }
+.clips button, .ghost { padding: 4px 10px; border: 1px solid var(--line); border-radius: 6px; background: var(--panel); cursor: pointer; }
+.clips button[aria-pressed=true] { border-color: var(--accent); background: var(--accent-soft); color: var(--accent); }
+.clipinfo { color: var(--muted); }
+.clipinfo a { color: var(--accent); }
+
+.times { display: grid; gap: 8px; padding: 12px; border: 1px solid var(--line); border-radius: 8px; background: var(--panel); }
+.timerow { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+.timerow label { width: 2.4em; font-weight: 600; }
+.timerow input { width: 5.5em; height: 32px; padding: 0 8px; border: 1px solid var(--line); border-radius: 6px;
+  background: var(--panel); font-variant-numeric: tabular-nums; }
+.timerow button:disabled { opacity: .5; cursor: default; }
+.timerow .primary { padding: 5px 14px; }
+.timerow .length { margin-right: auto; color: var(--muted); font-variant-numeric: tabular-nums; }
+
+form { overflow-y: auto; padding: 16px; border-left: 1px solid var(--line); background: var(--panel);
+  display: grid; gap: 14px; align-content: start; }
+form h2 { margin: 0; font-size: 18px; overflow-wrap: anywhere; }
+.was { color: var(--muted); font-size: 13px; }
+.field { display: grid; gap: 4px; }
+.field > label, legend { font-weight: 600; }
+.field input[type=text], .field select { width: 100%; }
+.hint { color: var(--muted); font-size: 12.5px; }
+fieldset { border: 0; margin: 0; padding: 0; display: grid; gap: 6px; }
+legend { padding: 0; margin-bottom: 2px; }
+.choice { display: flex; align-items: center; gap: 8px; cursor: pointer; }
+.choice input { width: 16px; height: 16px; accent-color: var(--accent); }
+.row { display: flex; flex-wrap: wrap; gap: 14px; }
+.actions { display: flex; gap: 8px; align-items: center; }
+.primary { padding: 8px 16px; border: 0; border-radius: 6px; background: var(--accent); color: var(--accent-ink);
+  font-weight: 600; cursor: pointer; }
+.primary:disabled { opacity: .55; cursor: default; }
+.status { min-height: 1.5em; font-size: 13px; color: var(--muted); }
+.status.bad { color: var(--bad); }
+kbd { padding: 0 5px; border: 1px solid var(--line); border-radius: 4px; background: var(--bg); font: 12px var(--font); }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+@media (max-width: 1040px) {
+  .app { height: auto; }
+  main { grid-template-columns: 1fr; }
+  .list { max-height: 34vh; border-right: 0; border-bottom: 1px solid var(--line); }
+  form { border-left: 0; border-top: 1px solid var(--line); }
+}
+</style>
+</head>
+<body>
+<div class="app">
+  <header>
+    <h1>클립 라벨 고치기</h1>
+    <div class="progress">사람이 확인한 줄 <b id="done">0</b> / <span id="total">0</span></div>
+    <div class="bar" aria-hidden="true"><i id="bar" style="width:0"></i></div>
+    <div class="filters">
+      <input id="query" type="search" placeholder="이름으로 찾기" aria-label="이름으로 찾기">
+      <select id="show" aria-label="보여 줄 줄">
+        <option value="todo">확인 안 한 줄</option>
+        <option value="all">전체</option>
+        <option value="llm">LLM 이 붙인 줄</option>
+        <option value="nofactor">요인이 빈 줄</option>
+        <option value="noclip">클립이 없는 줄</option>
+        <option value="human">확인한 줄</option>
+      </select>
+    </div>
+  </header>
+
+  <main>
+    <nav class="list" id="list" aria-label="클립 이름"></nav>
+
+    <section class="stage" aria-label="클립 보기">
+      <div class="player" id="player"><div class="blank">왼쪽에서 이름을 고르면 그 클립이 재생됩니다.</div></div>
+      <div class="clips" id="clips"></div>
+      <div class="clipinfo" id="clipinfo"></div>
+
+      <div class="times" id="times" hidden>
+        <div class="timerow">
+          <label for="start">시작</label>
+          <input id="start" type="text" inputmode="numeric" autocomplete="off" aria-describedby="timehint">
+          <button class="ghost" type="button" data-nudge="start" data-by="-1">−1초</button>
+          <button class="ghost" type="button" data-nudge="start" data-by="1">+1초</button>
+          <button class="ghost" type="button" id="start-here">지금 위치를 시작으로</button>
+        </div>
+        <div class="timerow">
+          <label for="end">끝</label>
+          <input id="end" type="text" inputmode="numeric" autocomplete="off" aria-describedby="timehint">
+          <button class="ghost" type="button" data-nudge="end" data-by="-1">−1초</button>
+          <button class="ghost" type="button" data-nudge="end" data-by="1">+1초</button>
+          <button class="ghost" type="button" id="end-here">지금 위치를 끝으로</button>
+        </div>
+        <div class="timerow">
+          <span class="length" id="length"></span>
+          <button class="ghost" type="button" id="replay">이 구간 재생</button>
+          <button class="ghost" type="button" id="tail">끝 5초만 재생</button>
+          <button class="ghost" type="button" id="reset-times">되돌리기</button>
+          <button class="primary" type="button" id="save-times">시간 저장</button>
+        </div>
+        <div class="hint" id="timehint">초(75)나 분:초(1:15)로 적습니다. 저장한 시각은 <code>make clips</code> 를 다시 돌려도 지켜집니다.</div>
+        <div class="status" id="time-status" role="status"></div>
+      </div>
+    </section>
+
+    <form id="form" hidden>
+      <div>
+        <h2 id="name"></h2>
+        <div class="was" id="was"></div>
+      </div>
+
+      <div class="field">
+        <label for="exercise_name">처방 운동명</label>
+        <input id="exercise_name" type="text" list="vocabulary" autocomplete="off">
+        <datalist id="vocabulary"></datalist>
+        <div class="hint">같은 동작이면 처방 어휘를 적습니다. 화면 이름에 OCR 부스러기가 붙었으면 바로잡은 이름을 적습니다. 그 밖에는 비웁니다.</div>
+      </div>
+
+      <div class="field">
+        <label for="fitness_factor">체력 요인</label>
+        <select id="fitness_factor"></select>
+      </div>
+
+      <fieldset>
+        <legend>단계</legend>
+        <div class="row" id="phases"></div>
+        <div class="hint">영상이 단계를 띄우면 그쪽이 먼저 쓰입니다. 여기 적은 단계는 영상에 표시가 없을 때만 쓰입니다.</div>
+      </fieldset>
+
+      <fieldset>
+        <legend>조건</legend>
+        <label class="choice"><input id="is_exercise" type="checkbox"> 운동이다 (인사·안내·휴식이 아니다)</label>
+        <label class="choice"><input id="home_ok" type="checkbox"> 집에서 할 수 있다</label>
+        <label class="choice"><input id="quiet" type="checkbox"> 조용하다 (뛰지 않는다)</label>
+        <label class="choice"><input id="needs_props" type="checkbox"> 도구가 필요하다</label>
+        <div class="hint">이름에 「밴드」가 없어도 화면에 밴드가 보이면 「도구가 필요하다」를 켭니다.</div>
+      </fieldset>
+
+      <div class="actions">
+        <button class="primary" id="save" type="submit">저장하고 다음</button>
+        <button class="ghost" id="skip" type="button">건너뛰기</button>
+      </div>
+      <div class="status" id="status" role="status"></div>
+      <div class="hint">저장하면 이 줄은 사람이 확인한 줄(<code>human</code>)이 되어, 라벨을 다시 돌려도 지켜집니다. 고친 것이 없어도 저장하면 확인한 것으로 적습니다.<br><kbd>Ctrl</kbd>+<kbd>Enter</kbd> 저장하고 다음</div>
+    </form>
+  </main>
+</div>
+
+<script>
+"use strict";
+const $ = (id) => document.getElementById(id);
+const FLAGS = ["is_exercise", "home_ok", "quiet", "needs_props"];
+const SOURCE = { human: "확인함", llm: "LLM", exact: "글자 같음", embed: "임베딩", rule: "규칙" };
+const TAIL_SEC = 5;   // 끝을 맞출 때는 끝자락만 되풀이해 본다
+let labels = [];
+let current = null;                  // 지금 고치는 줄
+let clipAt = 0;                      // 그 줄의 몇 번째 클립을 보고 있나
+let times = { start: 0, end: 0 };    // 화면에서 고치는 중인 시작 · 끝(초)
+
+const clock = (sec) => `${Math.floor(sec / 60)}:${String(sec % 60).padStart(2, "0")}`;
+
+/** 「75」 · 「1:15」 → 초. 읽을 수 없으면 null. */
+function seconds(text) {
+  const found = /^\s*(?:(\d+)\s*:\s*)?(\d+)\s*$/.exec(text);
+  if (!found) return null;
+  if (found[1] !== undefined && Number(found[2]) > 59) return null;
+  return Number(found[1] || 0) * 60 + Number(found[2]);
+}
+
+function el(tag, props = {}, ...children) {
+  const node = Object.assign(document.createElement(tag), props);
+  node.append(...children);
+  return node;
+}
+
+function say(id, text, bad = false) {
+  $(id).textContent = text;
+  $(id).className = bad ? "status bad" : "status";
+}
+
+const clip = () => current?.clips[clipAt] || null;
+const timesChanged = () => Boolean(clip()) && (times.start !== clip().start_sec || times.end !== clip().end_sec);
+
+// ── 재생기 ───────────────────────────────────────────────────────────────
+// 유튜브 재생기 API 를 받으면 「지금 위치」를 읽을 수 있다. 못 받으면 그냥 끼워 넣어 재생만 한다.
+let api = null;          // Promise<boolean>
+let player = null;       // YT.Player
+let playerReady = false;
+let wanted = null;       // 마지막으로 틀라고 한 것
+
+function loadApi() {
+  api ??= new Promise((resolve) => {
+    window.onYouTubeIframeAPIReady = () => resolve(true);
+    const script = el("script", { src: "https://www.youtube.com/iframe_api" });
+    script.onerror = () => resolve(false);
+    document.head.append(script);
+    setTimeout(() => resolve(Boolean(window.YT && window.YT.Player)), 8000);
+  });
+  return api;
+}
+
+function blank(text) {
+  try { player?.destroy?.(); } catch { /* 준비되기 전에 치우면 던질 수 있다 */ }
+  player = null;
+  playerReady = false;
+  wanted = null;
+  $("player").replaceChildren(el("div", { className: "blank", textContent: text }));
+}
+
+async function show(videoId, start, end) {
+  const mine = { videoId, startSeconds: start, endSeconds: end };
+  wanted = mine;
+  const ok = await loadApi();
+  if (wanted !== mine) return;   // 기다리는 사이 다른 것을 골랐다
+  if (!ok) {
+    const src = `https://www.youtube.com/embed/${encodeURIComponent(videoId)}` +
+      `?start=${start}&end=${end}&autoplay=1&rel=0&playsinline=1`;
+    $("player").replaceChildren(el("iframe", {
+      src, title: "클립", allow: "autoplay; encrypted-media; picture-in-picture", allowFullscreen: true,
+      referrerPolicy: "strict-origin-when-cross-origin",   // 유튜브는 어느 페이지가 틀었는지 못 받으면 재생을 거절한다
+    }));
+    return;
+  }
+  if (player) {
+    if (playerReady) player.loadVideoById(mine);   // 준비 중이면 onReady 가 wanted 를 튼다
+    return;
+  }
+  const holder = el("div");
+  $("player").replaceChildren(holder);
+  player = new YT.Player(holder, {
+    width: "100%", height: "100%", videoId,
+    playerVars: { start, end, autoplay: 1, rel: 0, playsinline: 1, origin: location.origin },
+    events: {
+      onReady: () => {
+        playerReady = true;
+        if (wanted && wanted !== mine) player.loadVideoById(wanted);
+        drawTimes();
+      },
+    },
+  });
+}
+
+/** 재생기가 지금 어디를 틀고 있나(초). 읽을 수 없으면 null. */
+const position = () => (player && playerReady ? player.getCurrentTime() : null);
+
+// ── 목록 ─────────────────────────────────────────────────────────────────
+function shown() {
+  const query = $("query").value.trim().replace(/\s+/g, "");
+  const show = $("show").value;
+  return labels.filter((row) => {
+    const text = (row.name_on_video + row.exercise_name).replace(/\s+/g, "");
+    if (query && !text.includes(query)) return false;
+    if (show === "todo") return row.source !== "human";
+    if (show === "llm") return row.source === "llm";
+    if (show === "human") return row.source === "human";
+    if (show === "nofactor") return !row.fitness_factor;
+    if (show === "noclip") return row.clips.length === 0;
+    return true;
+  });
+}
+
+function drawProgress() {
+  const done = labels.filter((row) => row.source === "human").length;
+  $("done").textContent = done;
+  $("total").textContent = labels.length;
+  $("bar").style.width = labels.length ? `${(done / labels.length) * 100}%` : "0";
+}
+
+function drawList() {
+  const rows = shown();
+  const list = $("list");
+  list.replaceChildren();
+  if (!rows.length) {
+    list.append(el("div", { className: "none", textContent: "여기에 맞는 줄이 없습니다." }));
+    return;
+  }
+  for (const row of rows) {
+    const tags = el("span", { className: "tags" },
+      el("span", { className: `tag ${row.source === "human" ? "human" : ""}`, textContent: SOURCE[row.source] || row.source }),
+      el("span", { className: `tag ${row.fitness_factor ? "" : "empty"}`, textContent: row.fitness_factor || "요인 없음" }),
+      el("span", { className: "tag", textContent: row.phase }),
+      el("span", { className: "tag", textContent: `클립 ${row.clips.length}` }));
+    const button = el("button", { type: "button" }, el("span", { className: "name", textContent: row.name_on_video }), tags);
+    if (row === current) button.setAttribute("aria-current", "true");
+    button.addEventListener("click", () => choose(row));
+    list.append(button);
+  }
+  list.querySelector("[aria-current=true]")?.scrollIntoView({ block: "nearest" });
+}
+
+// ── 클립과 시각 ──────────────────────────────────────────────────────────
+function drawClips() {
+  const bar = $("clips");
+  bar.replaceChildren();
+  (current?.clips || []).forEach((one, index) => {
+    const button = el("button", {
+      type: "button",
+      textContent: `${index + 1} · ${one.age_group || "?"} · ${clock(one.start_sec)}~${clock(one.end_sec)}${one.edited ? " · 고침" : ""}`,
+    });
+    button.setAttribute("aria-pressed", String(index === clipAt));
+    button.addEventListener("click", () => openClip(index));
+    bar.append(button);
+  });
+}
+
+function drawInfo() {
+  const one = clip();
+  if (!one) { $("clipinfo").replaceChildren(); return; }
+  const link = el("a", {
+    href: `https://www.youtube.com/watch?v=${encodeURIComponent(one.video_id)}&t=${one.start_sec}s`,
+    target: "_blank", rel: "noopener", textContent: "유튜브에서 열기",
+  });
+  $("clipinfo").replaceChildren(
+    `${one.age_group || "연령대 모름"} · ${one.title || one.video_id} · 영상이 띄운 단계: ${one.phase_on_video || "없음"}` +
+    `${one.edited ? " · 사람이 고친 시각" : ""} · `, link, " (재생이 막힌 영상이면 이 링크로 봅니다)");
+}
+
+function drawTimes() {
+  const one = clip();
+  $("times").hidden = !one;
+  if (!one) return;
+  $("start").value = clock(times.start);
+  $("end").value = clock(times.end);
+  const length = times.end - times.start;
+  $("length").textContent = length > 0 ? `길이 ${clock(length)}` : "끝이 시작보다 뒤여야 합니다";
+  $("save-times").disabled = !timesChanged() || length <= 0;
+  $("reset-times").disabled = !timesChanged();
+  const blind = position() === null;
+  $("start-here").disabled = blind;
+  $("end-here").disabled = blind;
+  $("start-here").title = $("end-here").title = blind ? "재생기가 준비되면 쓸 수 있습니다" : "";
+}
+
+function setTime(which, value) {
+  times[which] = Math.max(0, Math.round(value));
+  say("time-status", timesChanged() ? "고친 시각을 아직 저장하지 않았습니다." : "");
+  drawTimes();
+}
+
+function replay(fromEnd = false) {
+  const one = clip();
+  if (!one || times.end <= times.start) return;
+  show(one.video_id, fromEnd ? Math.max(times.start, times.end - TAIL_SEC) : times.start, times.end);
+}
+
+/** 고친 시각을 두고 떠나도 되나. 저장하지 않은 것이 있으면 묻는다. */
+const mayLeave = () => !timesChanged() || confirm("고친 시각을 저장하지 않았습니다. 버리고 넘어갈까요?");
+
+function openClip(index, asked = false) {
+  if (!asked && index !== clipAt && !mayLeave()) return;
+  clipAt = index;
+  const one = clip();
+  say("time-status", "");
+  drawClips();
+  drawInfo();
+  if (!one) {
+    blank(current ? "이 이름의 클립이 표에 없습니다. 라벨만 고칠 수 있습니다." : "왼쪽에서 이름을 고르면 그 클립이 재생됩니다.");
+    drawTimes();
+    return;
+  }
+  times = { start: one.start_sec, end: one.end_sec };
+  drawTimes();
+  show(one.video_id, one.start_sec, one.end_sec);
+}
+
+async function saveTimes() {
+  const one = clip();
+  if (!one) return;
+  $("save-times").disabled = true;
+  try {
+    const response = await fetch("/api/clips", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ video_id: one.video_id, seq: one.seq, start_sec: times.start, end_sec: times.end }),
+    });
+    const saved = await response.json();
+    if (!response.ok) throw new Error(saved.error || "저장하지 못했습니다");
+    Object.assign(one, { start_sec: saved.start_sec, end_sec: saved.end_sec, edited: saved.edited });
+    times = { start: one.start_sec, end: one.end_sec };
+    drawClips();
+    drawInfo();
+    say("time-status", `시각을 저장했습니다 (${clock(one.start_sec)}~${clock(one.end_sec)}).`);
+  } catch (error) {
+    say("time-status", error.message, true);
+  } finally {
+    drawTimes();
+  }
+}
+
+// ── 라벨 ─────────────────────────────────────────────────────────────────
+function fill(row) {
+  $("name").textContent = row.name_on_video;
+  $("was").textContent = `지금 적힌 방법: ${SOURCE[row.source] || row.source}`;
+  $("exercise_name").value = row.exercise_name;
+  $("fitness_factor").value = row.fitness_factor;
+  for (const radio of document.querySelectorAll("input[name=phase]")) radio.checked = radio.value === row.phase;
+  for (const flag of FLAGS) $(flag).checked = row[flag] === "True";
+}
+
+function choose(row) {
+  if (row !== current && !mayLeave()) return false;
+  current = row;
+  $("form").hidden = !row;
+  say("status", "");
+  if (row) fill(row);
+  drawList();
+  openClip(0, true);
+  return true;
+}
+
+function step(offset) {
+  const rows = shown();
+  const at = rows.indexOf(current);
+  const next = rows[at + offset] || rows[at + 1] || rows[at - 1] || rows[0] || null;
+  if (next && next !== current) choose(next);
+}
+
+async function save(event) {
+  event.preventDefault();
+  if (!current) return;
+  const rows = shown();
+  const after = rows[rows.indexOf(current) + 1] || null;   // 저장하면 이 줄이 목록에서 빠질 수 있어 먼저 잡아 둔다
+  const body = {
+    name_on_video: current.name_on_video,
+    exercise_name: $("exercise_name").value,
+    fitness_factor: $("fitness_factor").value,
+    phase: document.querySelector("input[name=phase]:checked")?.value || "",
+  };
+  for (const flag of FLAGS) body[flag] = $(flag).checked;
+
+  $("save").disabled = true;
+  try {
+    const response = await fetch("/api/labels", {
+      method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body),
+    });
+    const saved = await response.json();
+    if (!response.ok) throw new Error(saved.error || "저장하지 못했습니다");
+    Object.assign(current, saved);
+    drawProgress();
+    if (after && choose(after)) {
+      say("status", `「${saved.name_on_video}」을 저장했습니다.`);
+    } else {
+      fill(current);
+      drawList();
+      say("status", after ? "저장했습니다." : "저장했습니다. 이 목록의 마지막 줄입니다.");
+    }
+  } catch (error) {
+    say("status", error.message, true);
+  } finally {
+    $("save").disabled = false;
+  }
+}
+
+async function start() {
+  const response = await fetch("/api/state");
+  const data = await response.json();
+  labels = data.labels;
+  $("fitness_factor").append(el("option", { value: "", textContent: "(비움)" }),
+    ...data.factors.map((factor) => el("option", { value: factor, textContent: factor })));
+  $("phases").append(...data.phases.map((phase) =>
+    el("label", { className: "choice" }, el("input", { type: "radio", name: "phase", value: phase }), ` ${phase}`)));
+  $("vocabulary").append(...data.vocabulary.map((name) => el("option", { value: name })));
+  drawProgress();
+  drawList();
+  const first = shown()[0];
+  if (first) choose(first);
+}
+
+$("form").addEventListener("submit", save);
+$("skip").addEventListener("click", () => step(1));
+$("query").addEventListener("input", drawList);
+$("show").addEventListener("change", () => { drawList(); if (!shown().includes(current)) choose(shown()[0] || null); });
+
+for (const which of ["start", "end"]) {
+  $(which).addEventListener("change", () => {
+    const value = seconds($(which).value);
+    if (value === null) {
+      say("time-status", "시각은 75 나 1:15 처럼 적습니다.", true);
+      drawTimes();
+    } else {
+      setTime(which, value);
+    }
+  });
+}
+for (const button of document.querySelectorAll("[data-nudge]")) {
+  button.addEventListener("click", () => setTime(button.dataset.nudge, times[button.dataset.nudge] + Number(button.dataset.by)));
+}
+// 시작은 지금 위치를 내려 잡고 끝은 올려 잡는다. 보고 있던 장면이 구간 밖으로 밀리지 않게.
+$("start-here").addEventListener("click", () => { const at = position(); if (at !== null) setTime("start", Math.floor(at)); });
+$("end-here").addEventListener("click", () => { const at = position(); if (at !== null) setTime("end", Math.ceil(at)); });
+$("replay").addEventListener("click", () => replay());
+$("tail").addEventListener("click", () => replay(true));
+$("reset-times").addEventListener("click", () => { const one = clip(); if (one) { times = { start: one.start_sec, end: one.end_sec }; say("time-status", ""); drawTimes(); } });
+$("save-times").addEventListener("click", saveTimes);
+
+document.addEventListener("keydown", (event) => {
+  if ((event.ctrlKey || event.metaKey) && event.key === "Enter") $("form").requestSubmit();
+});
+window.addEventListener("beforeunload", (event) => { if (timesChanged()) event.preventDefault(); });
+start().catch((error) => {
+  $("list").replaceChildren(el("div", { className: "none", textContent: `불러오지 못했습니다: ${error.message}` }));
+});
+</script>
+</body>
+</html>
