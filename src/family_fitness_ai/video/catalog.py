@@ -68,6 +68,18 @@ def focus_quota(slots: int) -> int:
     return -(-slots * 3 // 4)
 
 
+def grow_quota(slots: int) -> int:
+    """측정으로 고른 「지금 키우기 좋은 영역」으로 채울 본운동 칸 수. 절반, 올림이다.
+
+    처방 근거의 본운동은 그 요인이 낮은 사람만의 운동이 아니다 — 국민체력100 처방은
+    약한 요인이 달라도 본운동이 거의 같다(요인이 낮은 집단과 전체의 비율이 대개
+    1.0~1.3배). 처방에 나온 동작을 앞세우기만 하니 본운동 가운데 대상 요인 동작이
+    24%였다(src/script/evaluate_coach.py). 나머지 절반은 지금처럼 처방 동작으로 채워
+    고르게 둔다. 보호자가 고른 역량(focus_quota)보다 작다.
+    """
+    return -(-slots // 2)
+
+
 @dataclass(frozen=True)
 class Clip:
     video_id: str
@@ -380,6 +392,40 @@ def _defer_recent(
     return out
 
 
+def _lead(ranked: list[Clip], grow: str, recent: Collection[str]) -> list[Clip]:
+    """본운동 후보의 앞쪽 어디를 잘라 보아도 grow 요인이 절반(올림) 이상이 되게 세운다.
+
+    본운동의 절반을 그 요인으로 채우는 규칙(grow_quota)과 같은 몫이다. 절반에 못 미치는
+    자리에서만 그 요인을 당겨 오고, 그 밖에는 원래 순위가 앞선 것을 쓴다 — 그 요인이
+    이미 앞을 차지한 목록(유소년 근력: 앞 20편이 모두 근력)을 절반으로 깎지 않는다.
+    같은 요인끼리, 다른 요인끼리는 순위 차례를 지킨다. 최근에 받은 영상은 요인과 상관없이
+    뒤에 그대로 둔다 — 새 것만 쓰는 grow 규칙(_pick_grow)과 같다. 다른 단계는 그대로고,
+    단계가 서 있던 자리도 바꾸지 않는다(_defer_recent 와 같은 까닭).
+    """
+    if not grow:
+        return ranked
+    places = [i for i, clip in enumerate(ranked) if clip.phase == "본운동"]
+    group = [ranked[i] for i in places]
+    rank = {id(clip): n for n, clip in enumerate(group)}
+    fresh = [clip for clip in group if clip.video_id not in recent]
+    stale = [clip for clip in group if clip.video_id in recent]
+    mine = [clip for clip in fresh if clip.fitness_factor == grow]
+    others = [clip for clip in fresh if clip.fitness_factor != grow]
+    woven: list[Clip] = []
+    count = 0
+    while mine or others:
+        short = count < grow_quota(len(woven) + 1)
+        earlier = bool(mine) and (not others or rank[id(mine[0])] < rank[id(others[0])])
+        source = mine if mine and (short or earlier) else others
+        clip = source.pop(0)
+        count += clip.fitness_factor == grow
+        woven.append(clip)
+    out = list(ranked)
+    for place, clip in zip(places, woven + stale, strict=True):
+        out[place] = clip
+    return out
+
+
 def prescribed_names(chunks: list[Chunk]) -> set[str]:
     names: set[str] = set()
     for chunk in chunks:
@@ -399,6 +445,7 @@ def routine(
     seed: str = "",
     recent: Collection[str] = (),
     focus: str = "",
+    grow: str = "",
 ) -> dict[str, list[Clip]]:
     """한 회분 클립을 단계별로 고른다.
 
@@ -421,6 +468,9 @@ def routine(
     날에 쓴 동작 차례로 그 역량을 다시 쓰고, 그래도 모자라면 나머지 칸과 함께 지금
     차례대로(다른 요인) 채운다. 한 회 안에서 같은 동작은 여전히 두 번 넣지 않는다.
     준비 · 정리운동은 focus 로 바뀌지 않는다.
+
+    grow(측정으로 고른 「지금 키우기 좋은 영역」)는 같은 방법으로 본운동의 절반
+    (grow_quota)을 채운다. focus 가 있으면 focus 가 앞선다.
     """
     conditions = conditions or Conditions()
     prescribed = prescribed or set()
@@ -438,12 +488,18 @@ def routine(
         if candidates and all(clip.title in used for clip in candidates):
             # 뺄 것을 빼고 나니 남는 게 없다. 그 단계만 처음으로 되돌린다.
             used -= {clip.title for clip in candidates}
+        # 대상 요인 몫을 grow 로 따로 채우는 본운동에서는 최근 영상을 요인과 상관없이 뒤로
+        # 미룬다. 요인이 맞는 최근 영상을 새 영상보다 앞에 세우면, 그 요인의 새 클립이
+        # 떨어진 다음 날 어제 본 클립이 본운동 앞자리를 다시 차지했다.
+        deferring = "" if grow and not focus and phase == "본운동" else factor
         ranked = _defer_recent(
-            sorted(candidates, key=rank), factor, recent, seed, sum(want.values())
+            sorted(candidates, key=rank), deferring, recent, seed, sum(want.values())
         )
         if focus and phase == "본운동":
             quota = focus_quota(want[phase])
             _pick_focus(picked[phase], ranked, focus, quota, used, recent, videos)
+        elif grow and phase == "본운동":
+            _pick_grow(picked[phase], ranked, grow, grow_quota(want[phase]), used, recent, videos)
         _take(picked[phase], ranked, want[phase], used, videos)
     return picked
 
@@ -465,6 +521,34 @@ def _take(
             picked.append(clip)
             used.add(clip.title)
             videos.add(clip.video_id)
+
+
+def _pick_grow(
+    picked: list[Clip],
+    ranked: list[Clip],
+    grow: str,
+    quota: int,
+    used: set[str],
+    recent: Collection[str],
+    videos: set[str],
+) -> None:
+    """본운동 앞 quota 칸을 grow 클립으로 채우되, 새 것만 쓴다. picked · used · videos 를 고친다.
+
+    보호자가 고른 역량(_pick_focus)과 달리 최근에 받은 영상 · 앞선 날에 쓴 동작 · 이 회에
+    이미 나온 영상은 쓰지 않는다. 측정으로 고른 요인 하나 때문에 같은 영상이 날마다
+    돌아오면(5세 민첩성 본운동이 13일 잇달아 나왔다) 고친 것을 도로 되돌린다. 새 것이
+    모자라면 남은 칸은 지금 차례(_take)대로 채운다.
+    """
+    for clip in ranked:
+        if len(picked) >= quota:
+            return
+        if clip.fitness_factor != grow or clip.title in used:
+            continue
+        if clip.video_id in recent or clip.video_id in videos:
+            continue
+        picked.append(clip)
+        used.add(clip.title)
+        videos.add(clip.video_id)
 
 
 def _pick_focus(
@@ -502,6 +586,7 @@ def pool(
     level: int | None = None,
     seed: str = "",
     recent: Collection[str] = (),
+    grow: str = "",
 ) -> tuple[list[Clip], str]:
     """고를 만한 클립과, 또래 밖까지 갔는지 알리는 말.
 
@@ -513,6 +598,11 @@ def pool(
 
     seed · recent 는 routine 과 같다. 최근에 받은 영상은 이름이 같은 다른 클립보다도
     뒤로 가므로, 이름마다 하나만 남길 때(_distinct) 새 영상 쪽이 남는다.
+
+    grow(측정으로 고른 「지금 키우기 좋은 영역」)가 있으면 본운동 후보의 앞쪽 어디를 잘라도
+    그 요인이 절반 이상이 되게 세운다(_lead). 코치는 목록 앞에서 고른다. 순위대로만 두면 처방 동작이
+    앞을 차지해 앞 20편 가운데 그 요인이 28%였고, 코치가 고른 뒤 채우기(compose._fill)가
+    바꿔 넣어야 했다 — 바꾼 만큼 코치 글이 규칙 문구로 바뀐다.
     """
     conditions = conditions or Conditions()
     prescribed = prescribed or set()
@@ -522,8 +612,8 @@ def pool(
     same = [clip for clip in fitting if clip.age_group in ages]
     other = [clip for clip in fitting if clip.age_group not in ages]
     rank = _age_rank(age_group, factor, prescribed, level, seed)
-    same = _defer_recent(sorted(same, key=rank), factor, recent, seed)
-    other = _defer_recent(sorted(other, key=rank), factor, recent, seed)
+    same = _lead(_defer_recent(sorted(same, key=rank), factor, recent, seed), grow, recent)
+    other = _lead(_defer_recent(sorted(other, key=rank), factor, recent, seed), grow, recent)
     # 또래가 모자란지는 합치기 전 클립 수로 본다. 합친 뒤의 수로 보면 조건을 켠
     # 유소년·성인이 60 밑으로 내려가, 전에 없던 다른 연령대가 섞이고 알림이 뜬다.
     short = len(same) < limit // 2

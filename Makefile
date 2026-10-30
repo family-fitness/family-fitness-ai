@@ -1,4 +1,5 @@
 .PHONY: verify lint types test tables ocr-name clips clip-labels kspo medical embed-model serve serve-prod probe label-tool
+.PHONY: verify lint types test tables ocr-name clips clip-labels kspo medical embed-model serve serve-prod probe eval-coach
 
 ## 가상환경을 켜 두었으면 그대로, 아니면 `make verify PY=.venv/bin/python`.
 PY ?= python
@@ -86,3 +87,8 @@ serve-prod:
 ## 돌고 있는 서비스에 요청을 보내 눈으로 확인한다. `make serve` 를 먼저 띄운다.
 probe:
 	$(PY) scripts/probe.py
+
+## 코치 편성이 키울 요인을 얼마나 담는지, 날마다 같은 영상이 나오지 않는지 잰다.
+## 또래 분포로 만든 94명을 규칙 편성으로 짠다. LLM 을 부르지 않는다(임베딩은 쓴다).
+eval-coach:
+	$(PY) src/script/evaluate_coach.py

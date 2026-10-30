@@ -294,6 +294,16 @@ def _prescriptions(profile: RunProfile, factor: str, band: str) -> tuple[list[Ch
     return [], []
 
 
+def _grows(read: Read) -> bool:
+    """측정으로 고른 「지금 키우기 좋은 영역」이 있나. 보호자가 고른 역량이면 아니다."""
+    return bool(read.factor) and not read.focused and read.percentile is not None
+
+
+def _quota(read: Read, slots: int) -> int:
+    """본운동 가운데 대상 요인으로 채울 칸 수."""
+    return catalog.focus_quota(slots) if read.focused else catalog.grow_quota(slots)
+
+
 def read_profile(profile: RunProfile, focus: str | None = None) -> Read:
     factor, band, percentile, rows = target_factor(profile, focus)
     chunks, notices = _prescriptions(profile, factor, band)
@@ -471,11 +481,11 @@ def _by_llm(
                 "단계별_편수": catalog.clip_counts(slot.minutes),
                 **(
                     {
-                        "본운동_대상_요인_편수": catalog.focus_quota(
-                            catalog.clip_counts(slot.minutes)["본운동"]
+                        "본운동_대상_요인_편수": _quota(
+                            read, catalog.clip_counts(slot.minutes)["본운동"]
                         )
                     }
-                    if read.focused
+                    if read.focused or _grows(read)
                     else {}
                 ),
             }
@@ -517,7 +527,14 @@ def _by_llm(
                 "이거나 같은 영상인 것이라도 이 요인을 먼저 고르고, 그래도 모자라면 다른 "
                 "요인으로 채운다. 준비운동과 정리운동은 이 비율과 상관없다."
                 if read.focused
-                else ""
+                else (
+                    f" 대상 요인 {read.factor} 은 지금 키우기 좋은 영역이다. 본운동의 절반 이상"
+                    "(자리의 본운동_대상_요인_편수만큼)을 요인 이 "
+                    f"{read.factor} 인 클립으로 고르고, 나머지는 근거에 나온 동작으로 고른다. "
+                    "준비운동과 정리운동은 이 비율과 상관없다."
+                    if _grows(read)
+                    else ""
+                )
             )
         ),
     }
@@ -557,6 +574,7 @@ def _by_llm(
             recent,
             start_date.isoformat(),
             read.factor if read.focused else "",
+            read.factor if _grows(read) else "",
         )
         week |= {clip.title for _, clip in chosen}
         # 코치가 골랐는데 이 회에서 빠진 동작. 글에 그 이름이 남아 있으면 못 쓴다.
@@ -596,6 +614,7 @@ def _fill(
     recent: Collection[str] = (),
     seed: str = "",
     focus: str = "",
+    grow: str = "",
 ) -> list[tuple[str, catalog.Clip]]:
     """단계마다 정한 편수를 채운다.
 
@@ -621,6 +640,11 @@ def _fill(
     다른 요인보다 먼저 쓴다(사용자 결정: 그 역량 → 새 영상). 그 역량이 모자라면
     남은 칸은 위의 차례대로 채운다. 코치가 그 역량이 아닌 본운동을 넷 골랐으면
     뒤의 것부터 밀려난다. 준비 · 정리운동은 focus 로 바뀌지 않는다.
+
+    grow(측정으로 고른 「지금 키우기 좋은 영역」)는 본운동의 절반(catalog.grow_quota)을
+    채우되 새 것만 쓴다 — 이번 주에 쓴 동작, 최근 영상, 이 회에 이미 나온 영상은 쓰지
+    않는다. 측정으로 고른 요인 하나 때문에 같은 영상이 날마다 돌아오지 않게 한다.
+    focus 가 있으면 focus 가 앞선다.
     """
     chosen: list[tuple[str, catalog.Clip]] = []
     today: set[str] = set()
@@ -649,14 +673,18 @@ def _fill(
                 key=lambda clip: (clip.title in week, older_first(clip)),
             )
         )
-        rounds = [(order, want[phase])]
+        # (후보, 몇 편까지, 이미 나온 영상의 다른 클립도 쓰나)
+        rounds = [(order, want[phase], True)]
         if focus and phase == "본운동":
             mine = [clip for clip in order if clip.fitness_factor == focus]
             # 그 역량 안에서는 코치가 고른 새 것 → 목록의 새 것 → 헌 것 차례를 지킨다.
-            rounds.insert(0, (mine, min(want[phase], catalog.focus_quota(want[phase]))))
+            rounds.insert(0, (mine, min(want[phase], catalog.focus_quota(want[phase])), True))
+        elif grow and phase == "본운동":
+            fresh = [clip for clip in order if clip.fitness_factor == grow and not worn(clip)]
+            rounds.insert(0, (fresh, min(want[phase], catalog.grow_quota(want[phase])), False))
         count = 0
-        for candidates, limit in rounds:
-            for other_videos_only in (True, False):
+        for candidates, limit, reuse_videos in rounds:
+            for other_videos_only in (True, False) if reuse_videos else (True,):
                 for clip in candidates:
                     if count >= limit:
                         break
@@ -752,8 +780,10 @@ def _by_rule(
             # 영상이 나오지 않게 한다.
             seed=start_date.isoformat(),
             recent=constraints.recent,
-            # 보호자가 키워 주고 싶은 역량이면 본운동 4분의 3 을 그 역량으로 채운다.
+            # 보호자가 키워 주고 싶은 역량이면 본운동 4분의 3 을, 측정으로 고른
+            # 「지금 키우기 좋은 영역」이면 절반을 그 요인으로 채운다.
             focus=read.factor if read.focused else "",
+            grow=read.factor if _grows(read) else "",
         )
         flat = [(phase, clip) for phase in catalog.PHASES for clip in picked[phase]]
         if not flat:
@@ -868,6 +898,9 @@ def build(
             level=catalog.level_of(read.percentile),
             seed=start_date.isoformat(),
             recent=constraints.recent,
+            # 측정으로 고른 요인이면 본운동 후보 앞쪽의 절반 이상을 그 요인으로
+            # 세운다(catalog._lead).
+            grow=read.factor if _grows(read) else "",
         )
         if pool_notice:
             notices.append(pool_notice)
