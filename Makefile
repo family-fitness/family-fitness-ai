@@ -1,3 +1,4 @@
+.PHONY: verify lint types test tables ocr-name clips clip-labels kspo medical embed-model serve serve-prod probe label-tool
 .PHONY: verify lint types test tables ocr-name clips clip-labels kspo medical embed-model serve serve-prod probe eval-coach
 
 ## 가상환경을 켜 두었으면 그대로, 아니면 `make verify PY=.venv/bin/python`.
@@ -45,6 +46,12 @@ clips:
 ## 사람이 고친 줄(source=human)은 --refresh 를 줘도 지킨다.
 clip-labels:
 	$(PY) -m family_fitness_ai.video.labels --llm
+
+## 클립 라벨과 시작 · 끝 시각을 화면에서 보고 고친다. 이름을 고르면 그 클립이 재생되고,
+## 저장한 라벨은 source=human 이 된다. 고친 시각은 video_clips.csv 와 clip_times.csv 에
+## 적혀 `make clips` 를 다시 돌려도 지켜진다. 이 PC 에만 연다(127.0.0.1). LLM 을 부르지 않는다.
+label-tool:
+	$(PY) src/script/label_clips.py
 
 ## 국민체력100 동영상(공공데이터) → data/release/kspo_videos.csv.
 ## 한 편이 한 동작이라 끊지 않고, 연령대·요인·수준·도구를 표에서 그대로 옮긴다.
