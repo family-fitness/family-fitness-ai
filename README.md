@@ -217,6 +217,7 @@ src/family_fitness_ai/
   stats/     원자료 → 표(build) · 표 읽기(tables) · 평가(assess)
   video/     클립 끊기(clips) · 이름 붙이기(labels) · 목록과 편성(catalog)
 docs/        인터페이스 명세
+src/script/  evaluate_coach.py — 코치 편성을 숫자로 잰다(make eval-coach, 서비스에 실리지 않는 도구)
 scripts/     probe.py — 돌고 있는 서비스를 눈으로 확인
 tests/       시험. LLM 을 부르지 않는다
 ```

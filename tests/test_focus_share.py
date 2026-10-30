@@ -3,7 +3,12 @@
 네 칸이면 세 칸, 칸 수가 다르면 올림이다. 전에는 처방에 나온 동작이 요인보다 앞서
 네 칸 가운데 두 칸만 그 역량이었다. 그 역량 후보가 모자라면 최근에 받은 영상 ·
 이번 주에 쓴 동작이라도 그 역량으로 먼저 채우고, 그래도 모자라면 다른 요인으로
-채운다. 준비 · 정리운동은 바꾸지 않는다. 고르지 않았으면 전과 같다.
+채운다. 준비 · 정리운동은 바꾸지 않는다.
+
+고르지 않았으면 측정으로 고른 「지금 키우기 좋은 영역」이 본운동의 절반(올림)을 채운다.
+이쪽은 새 것만 쓴다 — 이번 주에 쓴 동작, 최근 영상, 한 회 안에서 이미 나온 영상은
+쓰지 않고, 모자라면 지금 차례대로 채운다. 전에는 처방 동작이 앞서 본운동 가운데 대상
+요인이 24%였다(src/script/evaluate_coach.py).
 
 _fill 시험은 클립을 여기서 만들어 표 없이 돈다. routine · build 시험은 실제 표를 쓴다.
 """
@@ -98,11 +103,57 @@ def test_when_the_focus_runs_out_other_factors_fill_the_rest():
     assert sorted(_factors(chosen)) == ["근력", "근력", "근력", "유연성"]
 
 
-def test_without_a_focus_the_coachs_picks_stay():
+def test_without_a_focus_or_a_measured_factor_the_coachs_picks_stay():
     tally = compose.Tally()
     chosen = compose._fill(_main(COACH), [*COACH, *FLEX], WANT, set(), tally)
     assert [clip for _, clip in chosen] == COACH
     assert tally.filled == 0
+
+
+@pytest.mark.parametrize(("slots", "quota"), [(1, 1), (2, 1), (3, 2), (4, 2), (5, 3)])
+def test_the_measured_factor_takes_half_rounded_up(slots: int, quota: int):
+    assert catalog.grow_quota(slots) == quota
+
+
+def test_the_measured_factor_takes_half_of_the_coachs_main():
+    tally = compose.Tally()
+    chosen = compose._fill(_main(COACH), [*COACH, *FLEX], WANT, set(), tally, grow="유연성")
+    assert sorted(_factors(chosen)) == ["근력", "근력", "유연성", "유연성"]
+    # 남은 두 칸은 코치가 고른 앞의 둘이다.
+    assert [clip for _, clip in chosen if clip.fitness_factor == "근력"] == COACH[:2]
+    assert tally.filled == 2
+
+
+def test_the_measured_factor_does_not_bring_back_recent_videos():
+    # 보호자가 고른 역량과 다르다. 최근 영상밖에 없으면 그 요인으로 채우지 않는다.
+    recent = frozenset(clip.video_id for clip in FLEX)
+    chosen = compose._fill(
+        _main(COACH), [*COACH, *FLEX], WANT, set(), compose.Tally(), recent, grow="유연성"
+    )
+    assert [clip for _, clip in chosen] == COACH
+
+
+def test_the_measured_factor_does_not_bring_back_this_weeks_exercises():
+    week = {clip.title for clip in FLEX}
+    chosen = compose._fill(
+        _main(COACH), [*COACH, *FLEX], WANT, week, compose.Tally(), grow="유연성"
+    )
+    assert [clip for _, clip in chosen] == COACH
+
+
+def test_the_measured_factor_takes_one_clip_per_video():
+    same = [_clip("one", f"유연성 동작{n}", "유연성", start=n * 60) for n in range(3)]
+    chosen = compose._fill(
+        _main(COACH), [*COACH, *same], WANT, set(), compose.Tally(), grow="유연성"
+    )
+    assert sorted(_factors(chosen)) == ["근력", "근력", "근력", "유연성"]
+
+
+def test_a_guardians_focus_comes_before_the_measured_factor():
+    chosen = compose._fill(
+        _main(COACH), [*COACH, *FLEX], WANT, set(), compose.Tally(), focus="유연성", grow="근력"
+    )
+    assert _factors(chosen).count("유연성") == 3
 
 
 # ── 규칙 편성(catalog.routine) ────────────────────────────────────────────
@@ -265,18 +316,23 @@ def test_the_coach_plan_is_filled_to_three_quarters_with_the_focus(
 @needs_release
 @needs_index
 @needs_embedder
-def test_without_a_focus_the_coach_plan_is_not_swapped(monkeypatch: pytest.MonkeyPatch):
+def test_without_a_focus_the_measured_factor_takes_half_the_coachs_main(
+    monkeypatch: pytest.MonkeyPatch,
+):
     lowest, *_ = compose.target_factor(CHILD)
     fake = _coach_picks_other_factors(lowest)
     monkeypatch.setattr(compose.coach_llm, "enabled", lambda: True)
     monkeypatch.setattr(compose.coach_llm, "plan_week", fake)
     plan = compose.build([CHILD], date(2026, 9, 7), 1, compose.Constraints())
-    assert plan.proposal is not None
-    names = [
-        [s["exercise_name"] for s in m["sessions"] if s["phase"] == "본운동"]
-        for m in plan.proposal["missions"]
-    ]
-    # 코치가 고른 본운동이 그대로 나간다 — 대상 요인 클립으로 바꾸지 않는다.
-    assert names == fake.mains
-    assert all("본운동_대상_요인_편수" not in slot for slot in fake.seen["자리"])
+    mains = _mission_mains(plan)
+    assert len(mains) == 3
+    # 코치는 그 요인을 하나도 고르지 않았다. 채우기가 그 요인의 새 클립으로 바꾼다.
+    # 몇 칸까지 바뀌는지는 그 요인의 본운동 클립이 몇 영상에 있느냐에 달려 있다 —
+    # 한 회에 한 영상 하나, 이번 주에 쓴 것은 다시 쓰지 않는다. 절반 규칙은 위의
+    # _fill 시험이 본다.
+    assert mains[0].count(lowest) >= 1, mains[0]
+    assert "목록에서" in plan.steps[2].summary
+    # 코치에게도 몇 칸을 그 요인으로 채울지 알려 준다. 보호자가 고른 역량이 아니다.
+    assert all(slot["본운동_대상_요인_편수"] == 2 for slot in fake.seen["자리"])
+    assert "지금 키우기 좋은 영역" in fake.seen["요청"]
     assert "4분의 3" not in fake.seen["요청"]
